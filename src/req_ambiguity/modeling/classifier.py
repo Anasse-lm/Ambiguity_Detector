@@ -20,6 +20,9 @@ class DeBERTaAmbiguityClassifier(nn.Module):
         out = self.encoder(input_ids=input_ids, attention_mask=attention_mask)
         pooled = out.last_hidden_state[:, 0, :]
         pooled = self.dropout(pooled)
+        
+        # Cast to the classifier's dtype to prevent Half vs Float mismatch
+        pooled = pooled.to(self.classifier.weight.dtype)
         return self.classifier(pooled)
 
     @torch.no_grad()
