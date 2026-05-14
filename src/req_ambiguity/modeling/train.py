@@ -259,13 +259,18 @@ def train_from_config(
 
     num_labels = len(label_cols)
     model = DeBERTaAmbiguityClassifier(model_name, num_labels=num_labels, dropout=dropout).to(device)
+    model = model.float()  # Force FP32 to prevent Half-precision gradient overflow
     
     # Calculate pos_weight for severe class imbalance
     y_train = df_train[label_cols].values
     pos_counts = y_train.sum(axis=0)
     neg_counts = len(df_train) - pos_counts
     pos_counts = np.maximum(pos_counts, 1)  # avoid division by zero
-    pos_weight = torch.tensor(neg_counts / pos_counts, dtype=torch.float32).to(device)
+    
+    # Cap pos_weight to 20.0 to prevent exploding gradients and NaN loss
+    raw_weights = neg_counts / pos_counts
+    capped_weights = np.clip(raw_weights, 1.0, 20.0)
+    pos_weight = torch.tensor(capped_weights, dtype=torch.float32).to(device)
     
     loss_fn = nn.BCEWithLogitsLoss(pos_weight=pos_weight)
 
