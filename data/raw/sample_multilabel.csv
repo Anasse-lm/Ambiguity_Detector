@@ -1,0 +1,31 @@
+StoryText,SemanticAmbiguity,ScopeAmbiguity,ActorAmbiguity,AcceptanceAmbiguity,DependencyAmbiguity,PriorityAmbiguity,TechnicalAmbiguity
+"As a user I want to process data quickly.",1,0,1,0,0,0,0
+"As a nurse I want to access records to reduce errors.",0,1,0,0,0,0,0
+"As a admin I want to update system as soon as possible.",0,0,1,0,0,1,0
+"As a investor I need to transfer funds to save time.",1,0,0,1,0,0,0
+"As a bank customer I need to download statements.",0,0,0,0,1,0,0
+"As a caregiver I want fast performance for updates.",0,0,0,0,0,0,1
+"As a user I want to manage items appropriately.",1,0,1,1,0,0,0
+"As a nurse I need to update system when needed.",0,1,0,0,1,0,0
+"As a doctor I want to update system to save time.",1,0,0,1,0,0,0
+"As a loan officer I want to access system for goals.",1,1,1,0,0,0,0
+"As a quality inspector I need to schedule maintenance.",0,0,0,1,0,0,1
+"As a network admin I need to process requests.",0,0,1,0,1,0,0
+"As a financial advisor I process application with regulations.",0,0,0,0,0,0,1
+"As a account holder I want statements for security.",0,1,0,0,1,0,1
+"As a user I want to prescribe medication.",0,0,1,0,0,0,0
+"As a investor I want balance view as soon as possible.",0,0,0,0,0,1,0
+"As a nurse I update patient info urgently.",0,1,0,1,0,1,0
+"As a caregiver I improve patient care with fast performance.",1,0,0,1,0,0,1
+"As a user I handle requests comprehensively.",1,0,0,0,0,0,0
+"As a admin I configure detailed settings.",1,1,0,0,0,0,0
+"As a bank customer I track spending via statements.",0,0,0,0,1,0,0
+"As a doctor I save time updating records.",1,0,0,1,0,0,0
+"As a nurse I access records under conditions.",0,1,0,0,0,0,0
+"As a user I want robust error handling.",1,0,0,1,0,0,1
+"As a investor I want high priority transfers.",0,0,0,0,0,1,0
+"As a nurse I depend on upstream vitals.",0,0,0,0,1,0,0
+"As a admin I integrate with external system.",0,0,0,0,1,0,1
+"As a user I want vague benefits without metrics.",1,0,1,1,0,0,0
+"As a caregiver I meet compliance soon.",0,1,0,0,0,1,0
+"As a quality inspector I ensure quality outcomes.",1,0,0,1,0,0,0
