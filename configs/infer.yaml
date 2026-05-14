@@ -1,0 +1,38 @@
+# Inference + XAI defaults (reproducible without re-reading full train.yaml).
+
+model_name: "microsoft/deberta-v3-base"
+max_length: 128
+
+label_cols:
+  - SemanticAmbiguity
+  - ScopeAmbiguity
+  - ActorAmbiguity
+  - AcceptanceAmbiguity
+  - DependencyAmbiguity
+  - PriorityAmbiguity
+  - TechnicalAmbiguity
+
+paths:
+  checkpoint: "outputs/checkpoints/best_model.pt"
+  threshold_config: "configs/threshold.yaml"
+  placeholders: "configs/placeholders.yaml"
+  predictions_dir: "outputs/predictions/"
+  xai_reports_dir: "outputs/reports/xai/"
+
+# Batch inference (CSV / Excel) — preprocessing supplies text column name
+batch:
+  text_column: "StoryText"
+
+# Integrated Gradients (Captum) — applied at embedding layer in code
+integrated_gradients:
+  n_steps: 50
+  baseline: "pad_token_ids"
+  internal_batch_size: null
+
+xai_export:
+  top_k: 10
+  formats:
+    - json
+    - csv
+
+device: null

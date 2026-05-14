@@ -1,0 +1,333 @@
+# placeholders.yaml
+#
+# Controlled vocabulary of structured placeholders for hallucination-resistant
+# refinement of ambiguous software requirements.
+#
+# ============================================================================
+# DERIVATION
+# ============================================================================
+# This vocabulary was derived through a three-source synthesis:
+#
+#   (1) IEEE/ISO/IEC 29148 requirement quality criteria, which define what
+#       information a well-formed requirement must contain (unambiguous,
+#       complete, verifiable, traceable).
+#
+#   (2) The EARS notation (Mavin et al., 2009), which provides structured
+#       slots for triggers, actors, responses, and conditions.
+#
+#   (3) Empirical sampling of 210 ambiguous user stories from the
+#       Cornelius_2025 dataset (30 stratified samples per ambiguity type).
+#       Each sampled story was read manually and its missing-information
+#       gap was recorded; the recurring gap categories were then clustered
+#       into the placeholders below.
+#
+# The full sampling protocol and the per-story gap observations are
+# documented in Appendix [X] of the thesis. Random seed = 42 for the
+# sampling so the derivation is reproducible.
+#
+# ============================================================================
+# NAMING CONVENTION
+# ============================================================================
+# Every placeholder follows the pattern <TBD_UPPERCASE_UNDERSCORE>.
+# - Prefix "<TBD_" stands for "to be determined"
+# - Body uses underscore-separated uppercase words
+# - Body is a noun or noun phrase (never a verb)
+# - Abbreviations are avoided unless universally understood
+#
+# ============================================================================
+# POLICY STRUCTURE
+# ============================================================================
+# Each placeholder is defined by FOUR fields:
+#   description: what the placeholder represents
+#   trigger:     the linguistic or structural condition that justifies using it
+#   clarification_template: the question to ask a requirements engineer to resolve it
+#   example:     a before/after illustration drawn from a real sampled story
+#
+# When the original story is so vague that the ambiguity type itself is
+# unclear, the refinement system should generate clarification questions
+# INSTEAD of forcing a placeholder. Placeholders are for clearly identified
+# gaps; questions are for diffuse uncertainty.
+
+vocabulary_version: "1.0"
+total_placeholders: 16
+naming_convention: "<TBD_UPPERCASE_UNDERSCORE>"
+
+# ============================================================================
+# SEMANTIC AMBIGUITY  (3 placeholders)
+# ============================================================================
+# The 30 sampled SemanticAmbiguity stories share three recurring gaps:
+# (a) undefined action verbs ("process", "manage", "handle"),
+# (b) unmeasurable benefit clauses ("save time", "improve security"),
+# (c) undefined qualitative modifiers ("detailed", "comprehensive").
+
+SemanticAmbiguity:
+  - name: "<TBD_ACTION_SPECIFICATION>"
+    description: >
+      The specific operation meant by a generic action verb.
+    trigger: >
+      Use when the story uses a broad action verb such as "process",
+      "manage", "handle", "update", "access" without specifying which
+      concrete operation is meant.
+    clarification_template: >
+      What specific operation is meant by '<verb>' in this requirement
+      (read, write, create, modify, delete, query, validate)?
+    example:
+      before: "As a loan officer, I want to access system in order to meet financial goals."
+      after:  "As a loan officer, I want to <TBD_ACTION_SPECIFICATION> the system in order to meet financial goals."
+
+  - name: "<TBD_METRIC>"
+    description: >
+      A measurable quantity that operationalizes an unmeasurable benefit
+      or quality claim.
+    trigger: >
+      Use when the story states a benefit or quality goal (e.g., "save
+      time", "improve security", "enhance safety") without an
+      accompanying measurable threshold or metric.
+    clarification_template: >
+      What measurable quantity defines '<benefit_phrase>' in this
+      requirement (units, target value, baseline)?
+    example:
+      before: "As a doctor, I would like to update system to save time."
+      after:  "As a doctor, I would like to update system to save <TBD_METRIC> of clinician time."
+
+  - name: "<TBD_QUALIFIER>"
+    description: >
+      A specific definition that operationalizes a vague qualitative modifier.
+    trigger: >
+      Use when an adjective or adverb modifies a noun ambiguously and
+      neither a metric nor a threshold is the right fit (typically
+      qualitative descriptors like "detailed", "comprehensive",
+      "appropriate", "robust").
+    clarification_template: >
+      What specific definition or property is meant by '<qualifier>'
+      in this context?
+    example:
+      before: "...with detailed specifications and comprehensive requirements."
+      after:  "...with <TBD_QUALIFIER> specifications and <TBD_QUALIFIER> requirements."
+
+# ============================================================================
+# SCOPE AMBIGUITY  (2 placeholders)
+# ============================================================================
+# The 30 sampled ScopeAmbiguity stories share two recurring gaps:
+# (a) the affected entity set is undefined (which records, which orders),
+# (b) the applicability condition is unstated (under what circumstances).
+
+ScopeAmbiguity:
+  - name: "<TBD_SCOPE_ENTITY>"
+    description: >
+      The specific entity set affected by the requirement.
+    trigger: >
+      Use when the story refers to entities such as "records", "orders",
+      "data", "services" generically, without specifying which subset
+      (whose, which type, which time range).
+    clarification_template: >
+      Which specific subset of '<entity_noun>' does this requirement
+      apply to (ownership, type, time range)?
+    example:
+      before: "As a nurse, I want to access records in order to reduce errors."
+      after:  "As a nurse, I want to access <TBD_SCOPE_ENTITY> in order to reduce errors."
+
+  - name: "<TBD_SCOPE_CONDITION>"
+    description: >
+      The condition under which the requirement applies.
+    trigger: >
+      Use when the story describes a behavior but does not specify the
+      circumstances under which it should occur (always vs only in
+      certain situations).
+    clarification_template: >
+      Under what specific conditions does this requirement apply?
+    example:
+      before: "As a nurse, I need to update system so that I can reduce errors."
+      after:  "As a nurse, I need to update the system when <TBD_SCOPE_CONDITION> so that I can reduce errors."
+
+# ============================================================================
+# ACTOR AMBIGUITY  (2 placeholders)
+# ============================================================================
+# Every single one of the 30 sampled ActorAmbiguity stories used the
+# generic role "user" in the actor slot, even when the action requested
+# was clearly permission-restricted (e.g., "prescribe medication").
+
+ActorAmbiguity:
+  - name: "<TBD_ROLE>"
+    description: >
+      A specific user role or actor type.
+    trigger: >
+      Use when the story refers to "the user", "the admin", or "the
+      system" generically and multiple specific roles are plausible
+      given the requested action.
+    clarification_template: >
+      Which specific role is responsible for or affected by this
+      requirement?
+    example:
+      before: "As a user, I want to prescribe medication in order to save time."
+      after:  "As a <TBD_ROLE>, I want to prescribe medication in order to save time."
+
+  - name: "<TBD_PERMISSION_LEVEL>"
+    description: >
+      The authorization level required to perform the requested action.
+    trigger: >
+      Use when a role is named but the access privileges or authorization
+      level required for the action are not specified.
+    clarification_template: >
+      What permission level or authorization is required for this action
+      (read-only, read-write, admin, regulatory clearance)?
+    example:
+      before: "As a user, I want to process application in order to comply with regulations."
+      after:  "As a <TBD_ROLE> with <TBD_PERMISSION_LEVEL>, I want to process application in order to comply with regulations."
+
+# ============================================================================
+# ACCEPTANCE AMBIGUITY  (2 placeholders)
+# ============================================================================
+# The 30 sampled AcceptanceAmbiguity stories share two recurring gaps:
+# (a) no testable success condition (how would a tester verify this?),
+# (b) no measurable outcome (what observable result proves it works?).
+
+AcceptanceAmbiguity:
+  - name: "<TBD_ACCEPTANCE_CRITERIA>"
+    description: >
+      A testable condition that determines when the requirement is
+      considered satisfied.
+    trigger: >
+      Use when the requirement describes a goal but has no verifiable
+      pass/fail condition that a tester could use to confirm completion.
+    clarification_template: >
+      What specific, testable condition will indicate that this
+      requirement has been met (given/when/then format welcome)?
+    example:
+      before: "As a investor, I need to transfer funds so that I have better save time."
+      after:  "As a investor, I need to transfer funds; this is met when <TBD_ACCEPTANCE_CRITERIA>."
+
+  - name: "<TBD_MEASURABLE_OUTCOME>"
+    description: >
+      An observable, measurable result the requirement should produce.
+    trigger: >
+      Use when an outcome is implied but cannot be quantified from the
+      text alone (e.g., "ensure quality", "improve patient care").
+    clarification_template: >
+      What measurable outcome should this requirement produce (defect
+      rate, response time, satisfaction score)?
+    example:
+      before: "As a quality inspector, I need to schedule maintenance so that I have better ensure quality."
+      after:  "As a quality inspector, I need to schedule maintenance so that <TBD_MEASURABLE_OUTCOME> is achieved."
+
+# ============================================================================
+# DEPENDENCY AMBIGUITY  (2 placeholders)
+# ============================================================================
+# The 30 sampled DependencyAmbiguity stories share two recurring gaps:
+# (a) implicit upstream features or systems that are never named,
+# (b) preconditions or triggers that are not stated.
+
+DependencyAmbiguity:
+  - name: "<TBD_DEPENDENCY>"
+    description: >
+      An upstream feature, system, service, or data source that the
+      requirement implicitly depends on.
+    trigger: >
+      Use when the requirement assumes the presence of another
+      capability, integration, or data source that is not explicitly
+      mentioned in the story.
+    clarification_template: >
+      What other feature, system, or data source must exist for this
+      requirement to be implementable?
+    example:
+      before: "As a bank customer, I need to download statements so that I can track spending."
+      after:  "As a bank customer, I need to download statements (depends on <TBD_DEPENDENCY>) so that I can track spending."
+
+  - name: "<TBD_PRECONDITION>"
+    description: >
+      A state or event that must hold before the requirement is triggered.
+    trigger: >
+      Use when the requirement describes an action without specifying
+      the condition or state that initiates it.
+    clarification_template: >
+      What must be true (system state, prior event) before this
+      requirement is triggered?
+    example:
+      before: "As a network admin, I need to process requests so that I can maintain connectivity."
+      after:  "When <TBD_PRECONDITION>, as a network admin, I need to process requests so that I can maintain connectivity."
+
+# ============================================================================
+# PRIORITY AMBIGUITY  (2 placeholders)
+# ============================================================================
+# All 30 sampled PriorityAmbiguity stories contained the literal phrase
+# "as soon as possible", asserting urgency without specifying priority
+# level OR temporal urgency concretely.
+
+PriorityAmbiguity:
+  - name: "<TBD_PRIORITY_LEVEL>"
+    description: >
+      The priority classification of the requirement in the backlog.
+    trigger: >
+      Use when the story asserts importance ("as soon as possible",
+      "urgently", "high priority") without a concrete priority class.
+    clarification_template: >
+      What priority level should this requirement have (P0/P1/P2,
+      MoSCoW classification, or sprint placement)?
+    example:
+      before: "As a investor, I want to view account balance in order to track spending as soon as possible."
+      after:  "As a investor, I want to view account balance in order to track spending; priority: <TBD_PRIORITY_LEVEL>."
+
+  - name: "<TBD_URGENCY>"
+    description: >
+      The temporal urgency or hard deadline associated with the requirement.
+    trigger: >
+      Use when temporal urgency is asserted but the actual deadline,
+      time-criticality bound, or escalation trigger is not specified.
+    clarification_template: >
+      By when (specific date, sprint, or time bound) must this
+      requirement be delivered?
+    example:
+      before: "As a nurse, I need to update patient info so I can ensure compliance as soon as possible."
+      after:  "As a nurse, I need to update patient info so I can ensure compliance by <TBD_URGENCY>."
+
+# ============================================================================
+# TECHNICAL AMBIGUITY  (3 placeholders)
+# ============================================================================
+# 29 of the 30 sampled TechnicalAmbiguity stories contained the literal
+# phrase "with fast performance", a non-functional requirement stated
+# without any technical specification. The three recurring gaps are
+# performance targets, technical constraints, and integration points.
+
+TechnicalAmbiguity:
+  - name: "<TBD_PERFORMANCE_TARGET>"
+    description: >
+      The latency, throughput, or response-time target for a non-functional
+      performance requirement.
+    trigger: >
+      Use when the story makes a performance claim ("fast", "responsive",
+      "high throughput") without a numerical performance target.
+    clarification_template: >
+      What is the numerical performance target (e.g., response time in
+      ms, throughput in requests/second, p95/p99 latency)?
+    example:
+      before: "As a caregiver, I want to update patient info in order to improve patient care with fast performance."
+      after:  "As a caregiver, I want to update patient info in order to improve patient care with response time below <TBD_PERFORMANCE_TARGET>."
+
+  - name: "<TBD_TECH_CONSTRAINT>"
+    description: >
+      A technical platform, protocol, data format, or regulatory framework
+      that constrains how the requirement should be implemented.
+    trigger: >
+      Use when the requirement implies technical or regulatory
+      constraints without specifying them (platform, protocol, format,
+      compliance framework).
+    clarification_template: >
+      What specific technical or regulatory constraint applies
+      (platform, protocol, data format, compliance standard)?
+    example:
+      before: "As a financial advisor, I would like to process application to comply with regulations with fast performance."
+      after:  "As a financial advisor, I would like to process application to comply with <TBD_TECH_CONSTRAINT>."
+
+  - name: "<TBD_INTEGRATION_POINT>"
+    description: >
+      The specific external system, API, or service the requirement must
+      integrate with.
+    trigger: >
+      Use when the requirement implies integration with an external
+      system but does not name the target.
+    clarification_template: >
+      Which specific external system, API, or service should be
+      integrated with?
+    example:
+      before: "As a account holder, I want to download statements in order to improve security with fast performance."
+      after:  "As a account holder, I want to download statements via <TBD_INTEGRATION_POINT> in order to improve security."

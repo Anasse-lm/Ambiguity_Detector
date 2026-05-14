@@ -1,0 +1,26 @@
+# Decision thresholds: y_hat_k >= tau_k -> positive for label k.
+
+# Global default when per_label is absent or incomplete
+global_threshold: 0.5
+
+# Optional per-label overrides (must use same keys as train.yaml label_cols)
+per_label: null
+# Example:
+# per_label:
+#   SemanticAmbiguity: 0.45
+#   TechnicalAmbiguity: 0.55
+
+# Tuning (validation set) — used by thresholding / training scripts
+tuning:
+  enabled: true
+  metric: "micro_f1"
+  grid:
+    start: 0.1
+    end: 0.9
+    step: 0.05
+  # If true, tune each label independently on val (can overfit rare labels)
+  per_label_tuning: false
+
+# Output path written after tuning (inference reads this)
+paths:
+  best_thresholds_export: "outputs/reports/thresholds/best_thresholds.json"

@@ -1,0 +1,78 @@
+# Training configuration — thesis artifact (hyperparameters + data layout).
+# Version in git when you change experiments for full audit trail.
+
+model_name: "microsoft/deberta-v3-base"
+num_labels: 7
+max_length: 128
+
+# Optimization
+batch_size: 16
+learning_rate: 2.0e-5
+weight_decay: 0.01
+# Upper bound on epochs; the full count runs when early_stopping is false.
+epochs: 10
+warmup_ratio: 0.1
+dropout_rate: 0.1
+optimizer: "adamw"
+# If true, stop after `early_stopping_patience` epochs without monitor improvement.
+early_stopping: true
+early_stopping_patience: 3
+early_stopping_min_delta: 0.0
+
+# Reproducibility
+random_seed: 42
+
+# Which split file to use for training (val/test always from processed/)
+data:
+  train_split: "processed" # processed | augmented
+
+# Multi-label columns — order defines model output dimension k.
+# Do not reorder without retraining.
+label_cols:
+  - SemanticAmbiguity
+  - ScopeAmbiguity
+  - ActorAmbiguity
+  - AcceptanceAmbiguity
+  - DependencyAmbiguity
+  - PriorityAmbiguity
+  - TechnicalAmbiguity
+
+# Best checkpoint selection (validation set)
+best_model_metric: "macro_f1"
+
+# Train / val / test split (multi-label stratified in preprocessing)
+split:
+  train_ratio: 0.8
+  val_ratio: 0.1
+  test_ratio: 0.1
+
+# Augmentation (train only; ablation via augmentation.enabled)
+augmentation:
+  enabled: false
+  max_variants_per_story: 2
+  strategy: "append_markers"
+  # Cap on synthetic rows per ambiguous training example (see augmentation module)
+  variants_if_enabled: 2
+  reports_dir: "outputs/reports/augmentation/"
+
+# Preprocessing (Phase 2 pipeline)
+preprocessing:
+  min_story_chars: 5
+  reports_dir: "outputs/reports/preprocessing/"
+
+# Data layout
+paths:
+  # Replace with your labeled dataset (CSV or XLSX supported by preprocessing).
+  raw_data: "/Users/macbook/Documents/master/thesis/data/Cornelius_2025_user_story_ambiguity_dataset.xlsx"
+  text_column: "StoryText"
+  processed_dir: "data/processed/"
+  augmented_dir: "data/augmented/"
+  checkpoints_dir: "outputs/checkpoints/"
+  best_checkpoint: "outputs/checkpoints/best_model.pt"
+  training_logs_dir: "outputs/reports/training/"
+  figures_dir: "outputs/figures/"
+
+# References other configs (single source for paths used in training eval exports)
+config_refs:
+  placeholders: "configs/placeholders.yaml"
+  threshold: "configs/threshold.yaml"

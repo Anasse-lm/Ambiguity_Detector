@@ -1,0 +1,16 @@
+# Controlled LLM refinement (Gemini by default; mock when no API key).
+
+provider: "gemini"
+# When provider is gemini and GEMINI_API_KEY is unset, code falls back to mock.
+gemini_model: "gemini-2.0-flash"
+temperature: 0.2
+max_output_tokens: 2048
+
+paths:
+  placeholders: "configs/placeholders.yaml"
+  prompt_template: "configs/prompts/refine_user_story.jinja"
+
+# Post-condition checks (refinement module)
+validation:
+  enforce_legal_placeholders: true
+  placeholder_token_pattern: "<TBD_[A-Z0-9_]+>"

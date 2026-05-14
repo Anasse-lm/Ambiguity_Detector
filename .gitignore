@@ -1,0 +1,10 @@
+/venv
+venv/
+.hf_cache/
+.mplconfig/
+__pycache__/
+*.pyc
+.pytest_cache/
+.DS_Store
+/outputs/
+/data
