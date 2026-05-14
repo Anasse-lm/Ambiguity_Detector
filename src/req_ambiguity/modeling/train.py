@@ -18,7 +18,7 @@ from torch.utils.data import DataLoader
 from tqdm.auto import tqdm
 from transformers import DebertaV2Tokenizer, get_linear_schedule_with_warmup
 
-from req_ambiguity.evaluation.metrics import multilabel_metrics
+from req_ambiguity.evaluation.metrics import multilabel_metrics, find_optimal_threshold
 from req_ambiguity.modeling.classifier import DeBERTaAmbiguityClassifier
 from req_ambiguity.preprocessing.tokenize import UserStoryDataset
 from req_ambiguity.utils.config import resolve_path
@@ -43,11 +43,10 @@ def collate_batch(batch: list[dict[str, Any]]) -> dict[str, Any]:
 
 def _resolve_train_csv(cfg: Mapping[str, Any], *, project_root: Path) -> Path:
     paths = cfg["paths"]
-    data = cfg.get("data") or {}
-    split = str(data.get("train_split", "processed")).lower().strip()
-    if split == "augmented":
-        p = resolve_path(paths["augmented_dir"], root=project_root) / "train.csv"
-        hint = "Run scripts/augment.py (or --force) to create data/augmented/train.csv."
+    use_aug = cfg.get("data", {}).get("use_augmented_data", False)
+    if use_aug:
+        p = resolve_path(paths["augmented_dir"], root=project_root) / "train_augmented.csv"
+        hint = "Run scripts/augment.py (or --force) to create data/augmented/train_augmented.csv."
     else:
         p = resolve_path(paths["processed_dir"], root=project_root) / "train.csv"
         hint = "Run scripts/preprocess.py first."
@@ -179,6 +178,83 @@ def _plot_history(history: list[dict[str, Any]], figures_dir: Path) -> None:
     plt.close()
 
 
+def _plot_roc_curves(y_true: np.ndarray, probs: np.ndarray, label_names: list[str], figures_dir: Path) -> None:
+    try:
+        import matplotlib.pyplot as plt
+        from sklearn.metrics import roc_curve, auc
+    except ImportError:
+        return
+    plt.figure(figsize=(10, 8))
+    for i, name in enumerate(label_names):
+        yt = y_true[:, i]
+        pr = probs[:, i]
+        if np.unique(yt).size >= 2:
+            fpr, tpr, _ = roc_curve(yt, pr)
+            roc_auc = auc(fpr, tpr)
+            plt.plot(fpr, tpr, lw=2, label=f"{name} (AUC = {roc_auc:.2f})")
+    plt.plot([0, 1], [0, 1], color='navy', lw=2, linestyle='--')
+    plt.xlim([0.0, 1.0])
+    plt.ylim([0.0, 1.05])
+    plt.xlabel("False Positive Rate")
+    plt.ylabel("True Positive Rate")
+    plt.title("ROC Curves per Ambiguity Type")
+    plt.legend(loc="lower right")
+    plt.tight_layout()
+    plt.savefig(figures_dir / "roc_curves.png", dpi=150)
+    plt.close()
+
+
+def _plot_pr_curves(y_true: np.ndarray, probs: np.ndarray, label_names: list[str], figures_dir: Path) -> None:
+    try:
+        import matplotlib.pyplot as plt
+        from sklearn.metrics import precision_recall_curve, average_precision_score
+    except ImportError:
+        return
+    plt.figure(figsize=(10, 8))
+    for i, name in enumerate(label_names):
+        yt = y_true[:, i]
+        pr = probs[:, i]
+        if np.unique(yt).size >= 2:
+            precision, recall, _ = precision_recall_curve(yt, pr)
+            ap = average_precision_score(yt, pr)
+            plt.plot(recall, precision, lw=2, label=f"{name} (AP = {ap:.2f})")
+    plt.xlim([0.0, 1.0])
+    plt.ylim([0.0, 1.05])
+    plt.xlabel("Recall")
+    plt.ylabel("Precision")
+    plt.title("Precision-Recall Curves per Ambiguity Type")
+    plt.legend(loc="lower left")
+    plt.tight_layout()
+    plt.savefig(figures_dir / "pr_curves.png", dpi=150)
+    plt.close()
+
+
+def _plot_confusion_matrices(y_true: np.ndarray, preds: np.ndarray, label_names: list[str], figures_dir: Path) -> None:
+    try:
+        import matplotlib.pyplot as plt
+        from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay
+    except ImportError:
+        return
+    n_labels = len(label_names)
+    cols = 3
+    rows = (n_labels + cols - 1) // cols
+    fig, axes = plt.subplots(rows, cols, figsize=(cols * 4, rows * 4))
+    axes = axes.flatten()
+    for i, name in enumerate(label_names):
+        yt = y_true[:, i]
+        yp = preds[:, i]
+        cm = confusion_matrix(yt, yp)
+        disp = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=["No", "Yes"])
+        disp.plot(ax=axes[i], cmap='Blues', values_format='d')
+        axes[i].set_title(name)
+    # Hide any unused subplots
+    for j in range(i + 1, len(axes)):
+        fig.delaxes(axes[j])
+    plt.tight_layout()
+    plt.savefig(figures_dir / "confusion_matrices.png", dpi=150)
+    plt.close()
+
+
 def _log(msg: str) -> None:
     print(msg, flush=True)
 
@@ -261,17 +337,23 @@ def train_from_config(
     model = DeBERTaAmbiguityClassifier(model_name, num_labels=num_labels, dropout=dropout).to(device)
     model = model.float()  # Force FP32 to prevent Half-precision gradient overflow
     
-    # Calculate pos_weight for severe class imbalance
-    y_train = df_train[label_cols].values
-    pos_counts = y_train.sum(axis=0)
-    neg_counts = len(df_train) - pos_counts
-    pos_counts = np.maximum(pos_counts, 1)  # avoid division by zero
-    
-    # Cap pos_weight to 20.0 to prevent exploding gradients and NaN loss
+    # Mathematical rationale: BCEWithLogitsLoss applies pos_weight to the positive class.
+    # For highly imbalanced classes (e.g., TechnicalAmbiguity at 0.3%), raw pos_weight
+    # can exceed 300, leading to gradient explosion and NaN loss. Capping prevents this
+    # instability while still providing a strong signal to learn the minority class.
+    pos_weight_cap = float(cfg.get("loss", {}).get("pos_weight_cap", 50.0))
     raw_weights = neg_counts / pos_counts
-    capped_weights = np.clip(raw_weights, 1.0, 20.0)
+    capped_weights = np.clip(raw_weights, 1.0, pos_weight_cap)
     pos_weight = torch.tensor(capped_weights, dtype=torch.float32).to(device)
-    
+
+    # Log pos_weights for thesis
+    results_dir = project_root / "outputs" / "results"
+    results_dir.mkdir(parents=True, exist_ok=True)
+    with (results_dir / "pos_weights.txt").open("w", encoding="utf-8") as f:
+        f.write("Class pos_weights (capped):\n")
+        for name, w, raw in zip(label_cols, capped_weights, raw_weights):
+            f.write(f"{name}: {w:.2f} (raw: {raw:.2f})\n")
+
     loss_fn = nn.BCEWithLogitsLoss(pos_weight=pos_weight)
 
     opt_name = str(cfg.get("optimizer", "adamw")).lower()
@@ -371,9 +453,15 @@ def train_from_config(
             f"{best_metric_name}={score:.4f}  best={best_score:.4f}@ep{best_epoch}  "
             f"stall={stall}/{patience}  ({train_s:.0f}s train, {val_s:.0f}s val){mark}"
         )
+        
+        per_label_strs = [f"{lbl[:4]}={val_metrics['per_label'][lbl]['f1']:.3f}" for lbl in label_cols]
+        _log(f"    Per-label F1: {', '.join(per_label_strs)}")
 
         if early_stop and stall >= patience:
             _log(f"Early stopping: no {best_metric_name} improvement for {patience} epoch(s).")
+            with (results_dir / "early_stopping_epoch.txt").open("w", encoding="utf-8") as f:
+                f.write(f"Early stopping triggered at epoch: {epoch}\n")
+                f.write(f"Best epoch was: {best_epoch}\n")
             break
 
     if best_state is None:
@@ -416,16 +504,66 @@ def train_from_config(
 
     _plot_history(history, figures_dir)
 
-    _log("Evaluating on test split…")
-    test_loss, y_true_t, logits_t = evaluate_epoch(
-        model,
-        test_loader,
-        loss_fn,
-        device,
-        desc="Test",
-        show_progress=show_progress,
+    _log("Sweeping thresholds on validation set...")
+    val_loss_final, y_true_v_final, logits_v_final = evaluate_epoch(
+        model, val_loader, loss_fn, device, desc="Val Threshold", show_progress=False
     )
-    test_metrics = multilabel_metrics(y_true_t, logits_t, label_names=label_cols, threshold=0.5)
+    probs_v_final = 1.0 / (1.0 + np.exp(-logits_v_final))
+    
+    # Global threshold sweep for plotting and global baseline
+    thresholds = np.arange(0.10, 0.92, 0.02)
+    global_f1s = []
+    from sklearn.metrics import f1_score
+    for t in thresholds:
+        preds = (probs_v_final >= t).astype(np.int64)
+        global_f1s.append(f1_score(y_true_v_final, preds, average="macro", zero_division=0))
+    
+    best_global_idx = np.argmax(global_f1s)
+    optimal_global_threshold = float(thresholds[best_global_idx])
+    
+    try:
+        import matplotlib.pyplot as plt
+        plt.figure(figsize=(8, 5))
+        plt.plot(thresholds, global_f1s, marker='o')
+        plt.axvline(optimal_global_threshold, color='red', linestyle='--', label=f'Optimal: {optimal_global_threshold:.2f}')
+        plt.title("Macro F1 vs. Decision Threshold")
+        plt.xlabel("Threshold")
+        plt.ylabel("Macro F1 (Validation)")
+        plt.legend()
+        plt.tight_layout()
+        plt.savefig(figures_dir / "threshold_curve.png", dpi=150)
+        plt.close()
+    except ImportError:
+        pass
+
+    with (results_dir / "optimal_global_threshold.txt").open("w", encoding="utf-8") as f:
+        f.write(str(optimal_global_threshold))
+
+    # Per-label threshold sweep
+    per_label_thresholds = {}
+    for i, name in enumerate(label_cols):
+        best_l_f1 = -1.0
+        best_l_t = 0.5
+        yt = y_true_v_final[:, i]
+        pr = probs_v_final[:, i]
+        for t in thresholds:
+            yp = (pr >= t).astype(np.int64)
+            f1 = f1_score(yt, yp, zero_division=0)
+            if f1 > best_l_f1:
+                best_l_f1 = f1
+                best_l_t = float(t)
+        per_label_thresholds[name] = best_l_t
+    
+    with (results_dir / "optimal_thresholds.json").open("w", encoding="utf-8") as f:
+        json.dump(per_label_thresholds, f, indent=2)
+
+    _log(f"Optimal Global Threshold: {optimal_global_threshold:.2f}")
+
+    _log("Evaluating on test split with global threshold…")
+    test_loss, y_true_t, logits_t = evaluate_epoch(
+        model, test_loader, loss_fn, device, desc="Test", show_progress=show_progress
+    )
+    test_metrics = multilabel_metrics(y_true_t, logits_t, label_names=label_cols, threshold=optimal_global_threshold)
     _log(
         f"Test  loss={test_loss:.4f}  macro_f1={test_metrics['macro_f1']:.4f}  "
         f"micro_f1={test_metrics['micro_f1']:.4f}  "
@@ -434,6 +572,7 @@ def train_from_config(
     test_out = {
         "test_loss": test_loss,
         "metrics": test_metrics,
+        "optimal_global_threshold": optimal_global_threshold,
         "best_epoch": best_epoch,
         "best_val_score": float(best_score),
     }

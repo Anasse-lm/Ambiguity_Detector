@@ -15,7 +15,7 @@ warmup_ratio: 0.1
 dropout_rate: 0.1
 optimizer: "adamw"
 # If true, stop after `early_stopping_patience` epochs without monitor improvement.
-early_stopping: false
+early_stopping: true
 early_stopping_patience: 3
 early_stopping_min_delta: 0.0
 
@@ -24,7 +24,11 @@ random_seed: 42
 
 # Which split file to use for training (val/test always from processed/)
 data:
-  train_split: "processed" # processed | augmented
+  use_augmented_data: false # false=processed/train.csv, true=augmented/train_augmented.csv
+
+# Loss parameters
+loss:
+  pos_weight_cap: 50.0 # Maximum allowed pos_weight to prevent exploding gradients
 
 # Multi-label columns — order defines model output dimension k.
 # Do not reorder without retraining.

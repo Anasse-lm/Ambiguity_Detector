@@ -24,6 +24,35 @@ def probs_and_preds_from_logits(
     return probs, preds
 
 
+def find_optimal_threshold(
+    y_true: np.ndarray,
+    logits: np.ndarray,
+    label_names: list[str],
+    metric: str = "macro_f1"
+) -> float:
+    """Finds the probability threshold (0.1 to 0.9) that maximizes the target metric on validation set."""
+    probs = 1.0 / (1.0 + np.exp(-logits))
+    best_threshold = 0.5
+    best_score = -1.0
+    
+    # Test thresholds from 0.1 to 0.9 in 0.05 increments
+    thresholds = np.arange(0.1, 0.95, 0.05)
+    for t in thresholds:
+        preds = (probs >= t).astype(np.int64)
+        if metric == "macro_f1":
+            score = float(f1_score(y_true, preds, average="macro", zero_division=0))
+        elif metric == "micro_f1":
+            score = float(f1_score(y_true, preds, average="micro", zero_division=0))
+        else:
+            raise ValueError(f"Unsupported metric for tuning: {metric}")
+            
+        if score > best_score:
+            best_score = score
+            best_threshold = float(t)
+            
+    return best_threshold
+
+
 def multilabel_metrics(
     y_true: np.ndarray,
     logits: np.ndarray,
