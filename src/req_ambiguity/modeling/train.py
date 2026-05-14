@@ -434,6 +434,10 @@ def train_from_config(
             "val_macro_precision": val_metrics["macro_precision"],
             "val_macro_recall": val_metrics["macro_recall"],
         }
+        for lbl in label_cols:
+            row[f"val_f1_{lbl}"] = val_metrics["per_label"][lbl]["f1"]
+            row[f"val_prec_{lbl}"] = val_metrics["per_label"][lbl]["precision"]
+            row[f"val_rec_{lbl}"] = val_metrics["per_label"][lbl]["recall"]
         history.append(row)
 
         improved = score > best_score + min_delta
