@@ -10,12 +10,12 @@ batch_size: 16
 learning_rate: 2.0e-5
 weight_decay: 0.01
 # Upper bound on epochs; the full count runs when early_stopping is false.
-epochs: 10
+epochs: 20
 warmup_ratio: 0.1
 dropout_rate: 0.1
 optimizer: "adamw"
 # If true, stop after `early_stopping_patience` epochs without monitor improvement.
-early_stopping: true
+early_stopping: false
 early_stopping_patience: 3
 early_stopping_min_delta: 0.0
 
