@@ -10,7 +10,7 @@ batch_size: 16
 learning_rate: 2.0e-5
 weight_decay: 0.01
 # Upper bound on epochs; the full count runs when early_stopping is false.
-epochs: 20
+epochs: 10
 warmup_ratio: 0.1
 dropout_rate: 0.1
 optimizer: "adamw"
