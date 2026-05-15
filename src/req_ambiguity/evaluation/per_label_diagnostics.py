@@ -85,11 +85,11 @@ def run_inference(model, loader, device):
     return np.concatenate(labels_list, axis=0), np.concatenate(logits_list, axis=0)
 
 
-def generate_diagnostics(y_true, logits, label_cols, thresholds_dict, root: Path):
+def generate_diagnostics(y_true, logits, label_cols, thresholds_dict, output_dir: Path):
     probs = 1.0 / (1.0 + np.exp(-logits))
     
-    results_dir = root / "outputs" / "results"
-    figures_dir = root / "outputs" / "figures"
+    results_dir = output_dir / "results"
+    figures_dir = output_dir / "figures"
     cm_dir = figures_dir / "confusion_matrices"
     dist_dir = figures_dir / "prob_distributions"
     
@@ -232,7 +232,7 @@ def main():
         thresholds_dict = {}
         
     print("Generating diagnostic reports and figures...")
-    generate_diagnostics(y_true, logits, label_cols, thresholds_dict, root)
+    generate_diagnostics(y_true, logits, label_cols, thresholds_dict, root / "outputs")
 
 if __name__ == "__main__":
     main()
