@@ -530,6 +530,8 @@ def train_from_config(
     model.load_state_dict(best_state)
     
     if save_artifacts:
+        from req_ambiguity.utils.checkpointing import save_best_checkpoint
+        
         metadata = {
             "model_name": model_name,
             "label_cols": label_cols,

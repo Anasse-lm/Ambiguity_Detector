@@ -158,6 +158,28 @@ def generate_diagnostics(y_true, logits, label_cols, thresholds_dict, root: Path
         plt.savefig(dist_dir / f"{label}_prob_dist.png", dpi=150)
         plt.close(fig)
         
+        # 5. ROC Curve Plot
+        if np.unique(yt).size >= 2:
+            from sklearn.metrics import roc_curve, auc as calc_auc
+            fpr, tpr, _ = roc_curve(yt, pr)
+            roc_auc = calc_auc(fpr, tpr)
+            
+            roc_dir = figures_dir / "roc_curves"
+            roc_dir.mkdir(parents=True, exist_ok=True)
+            
+            fig, ax = plt.subplots(figsize=(6, 6))
+            ax.plot(fpr, tpr, color='darkorange', lw=2, label=f'ROC curve (AUC = {roc_auc:.3f})')
+            ax.plot([0, 1], [0, 1], color='navy', lw=2, linestyle='--')
+            ax.set_xlim([0.0, 1.0])
+            ax.set_ylim([0.0, 1.05])
+            ax.set_xlabel('False Positive Rate')
+            ax.set_ylabel('True Positive Rate')
+            ax.set_title(f'Receiver Operating Characteristic: {label}')
+            ax.legend(loc="lower right")
+            plt.tight_layout()
+            plt.savefig(roc_dir / f"{label}_roc.png", dpi=150)
+            plt.close(fig)
+        
     # Export CSV Report
     df_report = pd.DataFrame(report_data)
     df_report.to_csv(results_dir / "per_label_test_report.csv", index=False)
