@@ -7,6 +7,9 @@ max_length: 128
 
 # Optimization
 batch_size: 16
+gradient_accumulation_steps: 1
+use_mixed_precision: true
+dataloader_num_workers: 2
 learning_rate: 2.0e-5
 weight_decay: 0.01
 # Upper bound on epochs; the full count runs when early_stopping is false.
@@ -24,10 +27,11 @@ random_seed: 42
 
 # Which split file to use for training (val/test always from processed/)
 data:
-  use_augmented_data: false # false=processed/train.csv, true=augmented/train_augmented.csv
+  train_split: "processed"
 
 # Loss parameters
 loss:
+  pos_weight_strategy: "cap" # cap | sqrt
   pos_weight_cap: 50.0 # Maximum allowed pos_weight to prevent exploding gradients
 
 # Multi-label columns — order defines model output dimension k.
@@ -50,14 +54,7 @@ split:
   val_ratio: 0.1
   test_ratio: 0.1
 
-# Augmentation (train only; ablation via augmentation.enabled)
-augmentation:
-  enabled: false
-  max_variants_per_story: 2
-  strategy: "append_markers"
-  # Cap on synthetic rows per ambiguous training example (see augmentation module)
-  variants_if_enabled: 2
-  reports_dir: "outputs/reports/augmentation/"
+
 
 # Preprocessing (Phase 2 pipeline)
 preprocessing:

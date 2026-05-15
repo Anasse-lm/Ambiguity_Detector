@@ -35,13 +35,19 @@ def load_model_and_data(cfg, root: Path, device: torch.device):
     if not best_ckpt_path.exists():
         raise FileNotFoundError(f"Best checkpoint missing: {best_ckpt_path}")
         
-    payload = torch.load(best_ckpt_path, map_location=device)
-    model_name = payload["model_name"]
-    label_cols = payload["label_cols"]
-    max_length = payload["max_length"]
+    metadata_path = best_ckpt_path.with_name("best_model_metadata.json")
+    if not metadata_path.exists():
+        raise FileNotFoundError(f"Missing metadata: {metadata_path}")
+    with metadata_path.open("r", encoding="utf-8") as f:
+        metadata = json.load(f)
+        
+    state_dict = torch.load(best_ckpt_path, map_location=device, weights_only=True)
+    model_name = metadata["model_name"]
+    label_cols = metadata["label_cols"]
+    max_length = metadata["max_length"]
     
     model = DeBERTaAmbiguityClassifier(model_name, num_labels=len(label_cols), dropout=0.0).to(device)
-    model.load_state_dict(payload["model_state_dict"])
+    model.load_state_dict(state_dict)
     model.eval()
     
     tokenizer = DebertaV2Tokenizer.from_pretrained(model_name)

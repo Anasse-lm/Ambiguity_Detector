@@ -73,6 +73,9 @@ def train_one_epoch(
     epoch: int,
     total_epochs: int,
     show_progress: bool = True,
+    use_amp: bool = False,
+    scaler: Any = None,
+    accumulation_steps: int = 1,
 ) -> float:
     model.train()
     total_loss = 0.0
@@ -83,19 +86,37 @@ def train_one_epoch(
         leave=True,
         disable=not show_progress,
     )
-    for batch in pbar:
+    optimizer.zero_grad(set_to_none=True)
+    for i, batch in enumerate(pbar):
         input_ids = batch["input_ids"].to(device)
         attention_mask = batch["attention_mask"].to(device)
         labels = batch["labels"].to(device)
-        optimizer.zero_grad(set_to_none=True)
-        logits = model(input_ids, attention_mask)
-        loss = loss_fn(logits, labels)
-        loss.backward()
-        torch.nn.utils.clip_grad_norm_(model.parameters(), max_grad_norm)
-        optimizer.step()
-        if scheduler is not None:
-            scheduler.step()
-        loss_val = float(loss.detach().cpu())
+        
+        with torch.amp.autocast(device_type=device.type, enabled=use_amp):
+            logits = model(input_ids, attention_mask)
+            loss = loss_fn(logits, labels)
+            loss = loss / accumulation_steps
+            
+        if scaler is not None:
+            scaler.scale(loss).backward()
+        else:
+            loss.backward()
+            
+        if (i + 1) % accumulation_steps == 0 or (i + 1) == len(loader):
+            if scaler is not None:
+                scaler.unscale_(optimizer)
+                torch.nn.utils.clip_grad_norm_(model.parameters(), max_grad_norm)
+                scaler.step(optimizer)
+                scaler.update()
+            else:
+                torch.nn.utils.clip_grad_norm_(model.parameters(), max_grad_norm)
+                optimizer.step()
+                
+            if scheduler is not None:
+                scheduler.step()
+            optimizer.zero_grad(set_to_none=True)
+            
+        loss_val = float(loss.detach().cpu()) * accumulation_steps
         total_loss += loss_val
         n_batches += 1
         postfix: dict[str, Any] = {"loss": f"{loss_val:.4f}"}
@@ -114,6 +135,7 @@ def evaluate_epoch(
     *,
     desc: str = "Eval",
     show_progress: bool = True,
+    use_amp: bool = False,
 ) -> tuple[float, np.ndarray, np.ndarray]:
     model.eval()
     total_loss = 0.0
@@ -124,8 +146,9 @@ def evaluate_epoch(
         input_ids = batch["input_ids"].to(device)
         attention_mask = batch["attention_mask"].to(device)
         labels = batch["labels"].to(device)
-        logits = model(input_ids, attention_mask)
-        loss = loss_fn(logits, labels)
+        with torch.amp.autocast(device_type=device.type, enabled=use_amp):
+            logits = model(input_ids, attention_mask)
+            loss = loss_fn(logits, labels)
         total_loss += float(loss.detach().cpu())
         n_batches += 1
         logits_list.append(logits.detach().cpu().numpy())
@@ -260,7 +283,7 @@ def _log(msg: str) -> None:
 
 
 def train_from_config(
-    cfg: Mapping[str, Any], *, project_root: Path, show_progress: bool = True
+    cfg: Mapping[str, Any], *, project_root: Path, show_progress: bool = True, save_artifacts: bool = True
 ) -> dict[str, Any]:
     paths = cfg["paths"]
     # Writable HF cache (CI/sandbox may block ~/.cache; force project-local cache)
@@ -272,12 +295,17 @@ def train_from_config(
     mpl_dir = (project_root / ".mplconfig").resolve()
     mpl_dir.mkdir(parents=True, exist_ok=True)
     os.environ["MPLCONFIGDIR"] = str(mpl_dir)
+    
+    t_start = time.perf_counter()
 
     label_cols: list[str] = list(cfg["label_cols"])
     text_column = str(paths["text_column"])
     model_name = str(cfg["model_name"])
     max_length = int(cfg["max_length"])
-    batch_size = int(cfg["batch_size"])
+    batch_size = int(cfg.get("batch_size", 16))
+    accumulation_steps = int(cfg.get("gradient_accumulation_steps", 1))
+    use_amp = bool(cfg.get("use_mixed_precision", True))
+    num_workers = int(cfg.get("dataloader_num_workers", 2))
     lr = float(cfg["learning_rate"])
     weight_decay = float(cfg["weight_decay"])
     epochs = int(cfg["epochs"])
@@ -295,10 +323,14 @@ def train_from_config(
     set_seed(seed)
     if torch.cuda.is_available():
         device = torch.device("cuda")
+        torch.backends.cudnn.benchmark = True
+        torch.backends.cuda.matmul.allow_tf32 = True
     elif torch.backends.mps.is_available():
         device = torch.device("mps")
     else:
         device = torch.device("cpu")
+        
+    scaler = torch.amp.GradScaler('cuda') if (use_amp and device.type == "cuda") else None
 
     train_csv = _resolve_train_csv(cfg, project_root=project_root)
     val_csv = processed_dir / "val.csv"
@@ -324,34 +356,49 @@ def train_from_config(
         batch_size=batch_size,
         shuffle=True,
         collate_fn=collate_batch,
-        num_workers=0,
+        num_workers=num_workers,
+        pin_memory=(device.type == "cuda"),
+        persistent_workers=(num_workers > 0),
     )
     val_loader = DataLoader(
-        val_ds, batch_size=batch_size, shuffle=False, collate_fn=collate_batch, num_workers=0
+        val_ds, batch_size=batch_size, shuffle=False, collate_fn=collate_batch, 
+        num_workers=num_workers, pin_memory=(device.type == "cuda"), persistent_workers=(num_workers > 0)
     )
     test_loader = DataLoader(
-        test_ds, batch_size=batch_size, shuffle=False, collate_fn=collate_batch, num_workers=0
+        test_ds, batch_size=batch_size, shuffle=False, collate_fn=collate_batch, 
+        num_workers=num_workers, pin_memory=(device.type == "cuda"), persistent_workers=(num_workers > 0)
     )
 
     num_labels = len(label_cols)
     model = DeBERTaAmbiguityClassifier(model_name, num_labels=num_labels, dropout=dropout).to(device)
     model = model.float()  # Force FP32 to prevent Half-precision gradient overflow
     
+    # Calculate pos_weight for severe class imbalance
+    y_train = df_train[label_cols].values
+    pos_counts = y_train.sum(axis=0)
+    neg_counts = len(df_train) - pos_counts
+    pos_counts = np.maximum(pos_counts, 1)  # avoid division by zero
+    
     # Mathematical rationale: BCEWithLogitsLoss applies pos_weight to the positive class.
     # For highly imbalanced classes (e.g., TechnicalAmbiguity at 0.3%), raw pos_weight
-    # can exceed 300, leading to gradient explosion and NaN loss. Capping prevents this
-    # instability while still providing a strong signal to learn the minority class.
+    # can exceed 300, leading to gradient explosion and NaN loss. 
+    pos_weight_strategy = str(cfg.get("loss", {}).get("pos_weight_strategy", "cap")).lower()
     pos_weight_cap = float(cfg.get("loss", {}).get("pos_weight_cap", 50.0))
     raw_weights = neg_counts / pos_counts
-    capped_weights = np.clip(raw_weights, 1.0, pos_weight_cap)
-    pos_weight = torch.tensor(capped_weights, dtype=torch.float32).to(device)
+    
+    if pos_weight_strategy == "sqrt":
+        final_weights = np.sqrt(raw_weights)
+    else:
+        final_weights = np.clip(raw_weights, 1.0, pos_weight_cap)
+        
+    pos_weight = torch.tensor(final_weights, dtype=torch.float32).to(device)
 
     # Log pos_weights for thesis
-    results_dir = project_root / "outputs" / "results"
+    results_dir = resolve_path(paths.get("results_dir", "outputs/results"), root=project_root)
     results_dir.mkdir(parents=True, exist_ok=True)
     with (results_dir / "pos_weights.txt").open("w", encoding="utf-8") as f:
-        f.write("Class pos_weights (capped):\n")
-        for name, w, raw in zip(label_cols, capped_weights, raw_weights):
+        f.write(f"Class pos_weights ({pos_weight_strategy}):\n")
+        for name, w, raw in zip(label_cols, final_weights, raw_weights):
             f.write(f"{name}: {w:.2f} (raw: {raw:.2f})\n")
 
     loss_fn = nn.BCEWithLogitsLoss(pos_weight=pos_weight)
@@ -410,6 +457,9 @@ def train_from_config(
             epoch=epoch,
             total_epochs=epochs,
             show_progress=show_progress,
+            use_amp=use_amp,
+            scaler=scaler,
+            accumulation_steps=accumulation_steps,
         )
         train_s = time.perf_counter() - t0
         t1 = time.perf_counter()
@@ -420,6 +470,7 @@ def train_from_config(
             device,
             desc=f"Epoch {epoch}/{epochs} [val]",
             show_progress=show_progress,
+            use_amp=use_amp,
         )
         val_s = time.perf_counter() - t1
         val_metrics = multilabel_metrics(y_true_v, logits_v, label_names=label_cols, threshold=0.5)
@@ -477,40 +528,36 @@ def train_from_config(
     _log("-" * 72)
 
     model.load_state_dict(best_state)
-    checkpoints_dir.mkdir(parents=True, exist_ok=True)
-    best_ckpt_path.parent.mkdir(parents=True, exist_ok=True)
+    
+    if save_artifacts:
+        metadata = {
+            "model_name": model_name,
+            "label_cols": label_cols,
+            "max_length": max_length,
+            "num_labels": num_labels,
+            "best_epoch": best_epoch,
+            "best_val_score": float(best_score),
+            "best_model_metric": best_metric_name,
+            "train_csv": str(train_csv),
+            "random_seed": seed,
+            "total_training_time_seconds": float(time.perf_counter() - t_start),
+        }
+        
+        best_ckpt_path = save_best_checkpoint(best_state, checkpoints_dir, metadata)
 
-    payload = {
-        "model_state_dict": best_state,
-        "model_name": model_name,
-        "label_cols": label_cols,
-        "max_length": max_length,
-        "num_labels": num_labels,
-        "best_epoch": best_epoch,
-        "best_val_score": float(best_score),
-        "best_model_metric": best_metric_name,
-        "train_csv": str(train_csv),
-        "random_seed": seed,
-    }
-    torch.save(payload, best_ckpt_path)
+        tok_dir = checkpoints_dir / "tokenizer"
+        tokenizer.save_pretrained(tok_dir)
 
-    tok_dir = checkpoints_dir / "tokenizer"
-    tokenizer.save_pretrained(tok_dir)
+        logs_dir.mkdir(parents=True, exist_ok=True)
+        pd.DataFrame(history).to_csv(logs_dir / "history.csv", index=False)
+        with (logs_dir / "history.json").open("w", encoding="utf-8") as f:
+            json.dump(history, f, indent=2)
 
-    meta_path = best_ckpt_path.with_name("best_model_meta.json")
-    meta = {k: v for k, v in payload.items() if k != "model_state_dict"}
-    meta_path.write_text(json.dumps(meta, indent=2), encoding="utf-8")
-
-    logs_dir.mkdir(parents=True, exist_ok=True)
-    pd.DataFrame(history).to_csv(logs_dir / "history.csv", index=False)
-    with (logs_dir / "history.json").open("w", encoding="utf-8") as f:
-        json.dump(history, f, indent=2)
-
-    _plot_history(history, figures_dir)
+        _plot_history(history, figures_dir)
 
     _log("Sweeping thresholds on validation set...")
     val_loss_final, y_true_v_final, logits_v_final = evaluate_epoch(
-        model, val_loader, loss_fn, device, desc="Val Threshold", show_progress=False
+        model, val_loader, loss_fn, device, desc="Val Threshold", show_progress=False, use_amp=use_amp
     )
     probs_v_final = 1.0 / (1.0 + np.exp(-logits_v_final))
     
@@ -525,23 +572,24 @@ def train_from_config(
     best_global_idx = np.argmax(global_f1s)
     optimal_global_threshold = float(thresholds[best_global_idx])
     
-    try:
-        import matplotlib.pyplot as plt
-        plt.figure(figsize=(8, 5))
-        plt.plot(thresholds, global_f1s, marker='o')
-        plt.axvline(optimal_global_threshold, color='red', linestyle='--', label=f'Optimal: {optimal_global_threshold:.2f}')
-        plt.title("Macro F1 vs. Decision Threshold")
-        plt.xlabel("Threshold")
-        plt.ylabel("Macro F1 (Validation)")
-        plt.legend()
-        plt.tight_layout()
-        plt.savefig(figures_dir / "threshold_curve.png", dpi=150)
-        plt.close()
-    except ImportError:
-        pass
+    if save_artifacts:
+        try:
+            import matplotlib.pyplot as plt
+            plt.figure(figsize=(8, 5))
+            plt.plot(thresholds, global_f1s, marker='o')
+            plt.axvline(optimal_global_threshold, color='red', linestyle='--', label=f'Optimal: {optimal_global_threshold:.2f}')
+            plt.title("Macro F1 vs. Decision Threshold")
+            plt.xlabel("Threshold")
+            plt.ylabel("Macro F1 (Validation)")
+            plt.legend()
+            plt.tight_layout()
+            plt.savefig(figures_dir / "threshold_curve.png", dpi=150)
+            plt.close()
+        except ImportError:
+            pass
 
-    with (results_dir / "optimal_global_threshold.txt").open("w", encoding="utf-8") as f:
-        f.write(str(optimal_global_threshold))
+        with (results_dir / "optimal_global_threshold.txt").open("w", encoding="utf-8") as f:
+            f.write(str(optimal_global_threshold))
 
     # Per-label threshold sweep
     per_label_thresholds = {}
@@ -558,14 +606,15 @@ def train_from_config(
                 best_l_t = float(t)
         per_label_thresholds[name] = best_l_t
     
-    with (results_dir / "optimal_thresholds.json").open("w", encoding="utf-8") as f:
-        json.dump(per_label_thresholds, f, indent=2)
+    if save_artifacts:
+        with (results_dir / "optimal_thresholds.json").open("w", encoding="utf-8") as f:
+            json.dump(per_label_thresholds, f, indent=2)
 
     _log(f"Optimal Global Threshold: {optimal_global_threshold:.2f}")
 
     _log("Evaluating on test split with global threshold…")
     test_loss, y_true_t, logits_t = evaluate_epoch(
-        model, test_loader, loss_fn, device, desc="Test", show_progress=show_progress
+        model, test_loader, loss_fn, device, desc="Test", show_progress=show_progress, use_amp=use_amp
     )
     test_metrics = multilabel_metrics(y_true_t, logits_t, label_names=label_cols, threshold=optimal_global_threshold)
     _log(
@@ -580,38 +629,40 @@ def train_from_config(
         "best_epoch": best_epoch,
         "best_val_score": float(best_score),
     }
-    with (logs_dir / "test_metrics.json").open("w", encoding="utf-8") as f:
-        json.dump(test_out, f, indent=2, default=str)
+    
+    if save_artifacts:
+        with (logs_dir / "test_metrics.json").open("w", encoding="utf-8") as f:
+            json.dump(test_out, f, indent=2, default=str)
 
-    probs = 1.0 / (1.0 + np.exp(-logits_t))
-    pred_df = pd.DataFrame(
-        {
-            text_column: df_test[text_column].astype(str).values[: len(df_test)],
-        }
-    )
-    for i, c in enumerate(label_cols):
-        pred_df[f"{c}_true"] = y_true_t[:, i]
-        pred_df[f"{c}_prob"] = probs[:, i]
-    pred_df.to_csv(logs_dir / "test_probabilities.csv", index=False)
+        probs = 1.0 / (1.0 + np.exp(-logits_t))
+        pred_df = pd.DataFrame(
+            {
+                text_column: df_test[text_column].astype(str).values[: len(df_test)],
+            }
+        )
+        for i, c in enumerate(label_cols):
+            pred_df[f"{c}_true"] = y_true_t[:, i]
+            pred_df[f"{c}_prob"] = probs[:, i]
+        pred_df.to_csv(logs_dir / "test_probabilities.csv", index=False)
 
-    np.savez_compressed(
-        logs_dir / "test_logits_labels.npz",
-        logits=logits_t.astype(np.float32),
-        labels=y_true_t.astype(np.float32),
-    )
+        np.savez_compressed(
+            logs_dir / "test_logits_labels.npz",
+            logits=logits_t.astype(np.float32),
+            labels=y_true_t.astype(np.float32),
+        )
 
-    _log("=" * 72)
-    _log("Saved")
-    _log(f"  {best_ckpt_path}")
-    _log(f"  {meta_path}")
-    _log(f"  {tok_dir}")
-    _log(f"  {logs_dir / 'history.csv'}")
-    _log(f"  {logs_dir / 'test_metrics.json'}")
-    _log(f"  {figures_dir}")
-    _log("=" * 72)
+    if save_artifacts:
+        _log("=" * 72)
+        _log("Saved")
+        _log(f"  {best_ckpt_path}")
+        _log(f"  {tok_dir}")
+        _log(f"  {logs_dir / 'history.csv'}")
+        _log(f"  {logs_dir / 'test_metrics.json'}")
+        _log(f"  {figures_dir}")
+        _log("=" * 72)
 
     return {
-        "best_checkpoint": str(best_ckpt_path),
+        "best_checkpoint": str(best_ckpt_path) if save_artifacts else None,
         "best_epoch": best_epoch,
         "best_val_score": float(best_score),
         "best_model_metric": best_metric_name,
@@ -619,4 +670,5 @@ def train_from_config(
         "test_micro_f1": test_metrics["micro_f1"],
         "training_logs_dir": str(logs_dir),
         "figures_dir": str(figures_dir),
+        "history": history,
     }

@@ -30,21 +30,25 @@ class UserStoryDataset(Dataset):
         self._labels = labels
         self._tokenizer = tokenizer
         self._max_length = max_length
-
-    def __len__(self) -> int:
-        return len(self._texts)
-
-    def __getitem__(self, idx: int) -> dict[str, Any]:
+        
+        # Pre-tokenize once at startup to save DataLoader time during epochs
         encoding = self._tokenizer(
-            self._texts[idx],
+            self._texts,
             max_length=self._max_length,
             padding="max_length",
             truncation=True,
             return_tensors="pt",
         )
+        self._input_ids = encoding["input_ids"]
+        self._attention_mask = encoding["attention_mask"]
+
+    def __len__(self) -> int:
+        return len(self._texts)
+
+    def __getitem__(self, idx: int) -> dict[str, Any]:
         return {
-            "input_ids": encoding["input_ids"].squeeze(0),
-            "attention_mask": encoding["attention_mask"].squeeze(0),
+            "input_ids": self._input_ids[idx],
+            "attention_mask": self._attention_mask[idx],
             "labels": self._labels[idx],
             "text": self._texts[idx],
         }
