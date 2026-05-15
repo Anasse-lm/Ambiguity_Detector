@@ -1,0 +1,45 @@
+SemanticAmbiguity:
+  - triggers: ["process", "manage", "handle", "update", "access", "do"]
+    placeholder: "<TBD_ACTION_SPECIFICATION>"
+  - triggers: ["save", "improve", "enhance", "reduce", "increase", "better", "faster", "time", "security"]
+    placeholder: "<TBD_METRIC>"
+  - triggers: ["detailed", "comprehensive", "appropriate", "robust", "good", "clear"]
+    placeholder: "<TBD_QUALIFIER>"
+
+ScopeAmbiguity:
+  - triggers: ["records", "orders", "data", "services", "system", "items", "all", "some", "any"]
+    placeholder: "<TBD_SCOPE_ENTITY>"
+  - triggers: ["when", "if", "during", "always", "sometimes", "condition"]
+    placeholder: "<TBD_SCOPE_CONDITION>"
+
+ActorAmbiguity:
+  - triggers: ["user", "admin", "system", "customer", "client", "person"]
+    placeholder: "<TBD_ROLE>"
+  - triggers: ["prescribe", "authorize", "approve", "reject", "allow", "deny", "permission"]
+    placeholder: "<TBD_PERMISSION_LEVEL>"
+
+AcceptanceAmbiguity:
+  - triggers: ["test", "verify", "check", "confirm", "ensure", "success", "criteria"]
+    placeholder: "<TBD_ACCEPTANCE_CRITERIA>"
+  - triggers: ["outcome", "result", "rate", "score", "time", "measurable"]
+    placeholder: "<TBD_MEASURABLE_OUTCOME>"
+
+DependencyAmbiguity:
+  - triggers: ["depends", "via", "through", "using", "requires", "needs", "dependency"]
+    placeholder: "<TBD_DEPENDENCY>"
+  - triggers: ["before", "after", "once", "prior", "following", "precondition"]
+    placeholder: "<TBD_PRECONDITION>"
+
+PriorityAmbiguity:
+  - triggers: ["priority", "important", "critical", "urgent", "must"]
+    placeholder: "<TBD_PRIORITY_LEVEL>"
+  - triggers: ["soon", "possible", "immediately", "deadline", "fast", "urgency"]
+    placeholder: "<TBD_URGENCY>"
+
+TechnicalAmbiguity:
+  - triggers: ["fast", "responsive", "throughput", "latency", "speed", "performance"]
+    placeholder: "<TBD_PERFORMANCE_TARGET>"
+  - triggers: ["platform", "protocol", "format", "compliance", "standard", "constraint"]
+    placeholder: "<TBD_TECH_CONSTRAINT>"
+  - triggers: ["integrate", "api", "service", "external", "connect", "integration"]
+    placeholder: "<TBD_INTEGRATION_POINT>"

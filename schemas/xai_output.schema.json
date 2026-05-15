@@ -1,0 +1,79 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "XAI Output Record",
+  "type": "object",
+  "properties": {
+    "story_id": {
+      "type": "string"
+    },
+    "original_text": {
+      "type": "string"
+    },
+    "predicted_labels": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "label_explanations": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "label_index": { "type": "integer" },
+          "predicted_probability": { "type": "number" },
+          "top_evidence_tokens": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "token": { "type": "string" },
+                "score": { "type": "number" },
+                "position": { "type": "integer" }
+              },
+              "required": ["token", "score", "position"]
+            }
+          },
+          "word_level_attributions": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "word": { "type": "string" },
+                "score": { "type": "number" }
+              },
+              "required": ["word", "score"]
+            }
+          },
+          "bridge_selections": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "placeholder": { "type": "string" },
+                "match_score": { "type": "number" },
+                "matched_evidence": {
+                  "type": "array",
+                  "items": { "type": "string" }
+                },
+                "via_fallback": { "type": "boolean" }
+              },
+              "required": ["placeholder", "match_score", "matched_evidence", "via_fallback"]
+            }
+          }
+        },
+        "required": ["label_index", "predicted_probability", "top_evidence_tokens", "word_level_attributions", "bridge_selections"]
+      }
+    },
+    "bridge_summary": {
+      "type": "object",
+      "properties": {
+        "total_candidates": { "type": "integer" },
+        "used_fallback": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      },
+      "required": ["total_candidates", "used_fallback"]
+    }
+  },
+  "required": ["story_id", "original_text", "predicted_labels", "label_explanations", "bridge_summary"]
+}
