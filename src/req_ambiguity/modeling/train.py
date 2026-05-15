@@ -106,13 +106,16 @@ def train_one_epoch(
             if scaler is not None:
                 scaler.unscale_(optimizer)
                 torch.nn.utils.clip_grad_norm_(model.parameters(), max_grad_norm)
+                scale_before = scaler.get_scale()
                 scaler.step(optimizer)
                 scaler.update()
+                skip_lr_sched = (scale_before > scaler.get_scale())
             else:
                 torch.nn.utils.clip_grad_norm_(model.parameters(), max_grad_norm)
                 optimizer.step()
+                skip_lr_sched = False
                 
-            if scheduler is not None:
+            if scheduler is not None and not skip_lr_sched:
                 scheduler.step()
             optimizer.zero_grad(set_to_none=True)
             
