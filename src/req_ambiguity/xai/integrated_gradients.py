@@ -36,7 +36,7 @@ class AmbiguityExplainer:
     def _forward_func(self, input_ids: torch.Tensor, attention_mask: torch.Tensor) -> torch.Tensor:
         return self.model(input_ids, attention_mask)
 
-    def explain(self, text: str, target_label: str, n_steps: int = 50, story_id: str = None) -> Tuple[List[str], np.ndarray]:
+    def explain(self, text: str, target_label: str, n_steps: int = 10, story_id: str = None) -> Tuple[List[str], np.ndarray]:
         target_idx = self.label_cols.index(target_label)
         
         cache_path = None
