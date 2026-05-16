@@ -67,6 +67,9 @@ def main():
                 if sel["via_fallback"]:
                     via_fallback = True
             
+            status = "FALLBACK" if via_fallback else "HIT"
+            tqdm.write(f"Sample {story_id} [{label}] - Bridge: {status} | Placeholders: {','.join(set(selected_placeholders))}")
+            
             records.append({
                 "StoryID": story_id,
                 "Label": label,

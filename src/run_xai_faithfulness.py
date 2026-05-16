@@ -98,6 +98,8 @@ def main():
                 suff_prob = torch.sigmoid(suff_logits)[0, label_idx].item()
             sufficiency = orig_prob - suff_prob
             
+            tqdm.write(f"Sample {story_id} [{label}] - Comp: {comprehensiveness:.4f} | Suff: {sufficiency:.4f}")
+            
             records.append({
                 "StoryID": story_id,
                 "Label": label,
