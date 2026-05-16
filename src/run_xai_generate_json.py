@@ -28,7 +28,8 @@ def main():
     device = torch.device("cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu")
     
     model, test_loader, label_cols = load_model_and_data(cfg, root, device)
-    tokenizer = test_loader.dataset.tokenizer
+    from transformers import AutoTokenizer
+    tokenizer = AutoTokenizer.from_pretrained(cfg["model_name"])
 
     explainer = AmbiguityExplainer(model, tokenizer, device, label_cols)
     bridge = PlaceholderBridge()
@@ -68,9 +69,9 @@ def main():
                 label_idx = label_cols.index(label)
                 prob = row.get(f"prob_{label}", 0.0)
                 
-                tokens, attributions = explainer.explain(text, label)
+                tokens, attributions = explainer.explain(text, label, story_id=str(story_id))
                 
-                top_k = explainer.top_evidence_tokens(text, label, top_k=5)
+                top_k = explainer.top_evidence_tokens(text, label, top_k=5, story_id=str(story_id))
                 
                 top_evidence_tokens = [{"token": t, "score": s, "position": 0} for t, s in top_k]
                 word_level_attributions = [{"word": t.replace(" ", ""), "score": float(s)} for t, s in zip(tokens, attributions) if t not in tokenizer.all_special_tokens]

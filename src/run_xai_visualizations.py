@@ -18,7 +18,6 @@ from req_ambiguity.xai.visualization import render_html_heatmap, render_png_heat
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--dry-run", action="store_true", help="Run on just 10 stories")
     args = parser.parse_args()
 
     root = find_project_root()
@@ -29,21 +28,18 @@ def main():
 
     # Load Model
     model, test_loader, label_cols = load_model_and_data(cfg, root, device)
-    tokenizer = test_loader.dataset.tokenizer
+    from transformers import AutoTokenizer
+    tokenizer = AutoTokenizer.from_pretrained(cfg["model_name"])
 
     explainer = AmbiguityExplainer(model, tokenizer, device, label_cols)
 
-    # Load Sample A
     sample_a_path = root / "outputs/xai/samples/visualization_candidates.csv"
     if not sample_a_path.exists():
         print(f"Sample A not found at {sample_a_path}. Run sample prep first.")
         return
         
     df = pd.read_csv(sample_a_path)
-    if args.dry_run:
-        df = df.head(10)
 
-    # Output dirs
     vis_dir = root / "outputs/xai/visualizations"
     html_dir = vis_dir / "html"
     png_dir = vis_dir / "png"
@@ -52,7 +48,6 @@ def main():
     png_dir.mkdir(parents=True, exist_ok=True)
     text_dir.mkdir(parents=True, exist_ok=True)
 
-    # Prepare index HTML
     index_html = ["<html><head><title>XAI Visualizations</title></head><body style='font-family: sans-serif;'><h1>XAI Visualization Contact Sheet</h1>"]
 
     for _, row in tqdm(df.iterrows(), total=len(df), desc="Generating Visualizations"):
@@ -62,9 +57,9 @@ def main():
         tp_labels = [l for l in tp_labels if l]
 
         for label in tp_labels:
-            tokens, attributions = explainer.explain(text, label)
+            tokens, attributions = explainer.explain(text, label, story_id=str(story_id))
             
-            base_name = f"{story_id}__{label}"
+            base_name = f"{story_id}__{label.replace('/', '_')}"
             
             html_path = html_dir / f"{base_name}.html"
             render_html_heatmap(tokens, attributions, html_path)

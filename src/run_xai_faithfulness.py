@@ -19,7 +19,6 @@ from req_ambiguity.xai.integrated_gradients import AmbiguityExplainer
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--dry-run", action="store_true", help="Run on just 10 stories")
     args = parser.parse_args()
 
     root = find_project_root()
@@ -28,7 +27,8 @@ def main():
     device = torch.device("cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu")
     
     model, test_loader, label_cols = load_model_and_data(cfg, root, device)
-    tokenizer = test_loader.dataset.tokenizer
+    from transformers import AutoTokenizer
+    tokenizer = AutoTokenizer.from_pretrained(cfg["model_name"])
     explainer = AmbiguityExplainer(model, tokenizer, device, label_cols)
 
     sample_c_path = root / "outputs/xai/samples/faithfulness_sample.csv"
@@ -37,8 +37,6 @@ def main():
         return
         
     df = pd.read_csv(sample_c_path)
-    if args.dry_run:
-        df = df.head(10)
 
     results_dir = root / "outputs/xai/results"
     figures_dir = root / "outputs/xai/figures"
@@ -54,6 +52,11 @@ def main():
         tp_labels = [l for l in tp_labels if l]
 
         for label in tp_labels:
+            if f"conf_band_{label}" in row:
+                conf_band = row[f"conf_band_{label}"]
+            else:
+                conf_band = "Unknown"
+                
             label_idx = label_cols.index(label)
             
             encoding = tokenizer(text, return_tensors="pt", truncation=True, padding="max_length", max_length=128)
@@ -64,7 +67,7 @@ def main():
                 orig_logits = model(input_ids, attention_mask)
                 orig_prob = torch.sigmoid(orig_logits)[0, label_idx].item()
                 
-            _, attributions = explainer.explain(text, label)
+            _, attributions = explainer.explain(text, label, story_id=str(story_id))
             
             special_ids = {tokenizer.cls_token_id, tokenizer.sep_token_id, tokenizer.pad_token_id}
             
@@ -98,6 +101,7 @@ def main():
             records.append({
                 "StoryID": story_id,
                 "Label": label,
+                "ConfBand": conf_band,
                 "OriginalProb": orig_prob,
                 "Comprehensiveness": comprehensiveness,
                 "Sufficiency": sufficiency
@@ -105,6 +109,7 @@ def main():
 
     out_df = pd.DataFrame(records)
     
+    # Per label aggregation
     agg_records = []
     for label in label_cols:
         ldf = out_df[out_df["Label"] == label]
@@ -121,6 +126,21 @@ def main():
     agg_df = pd.DataFrame(agg_records)
     agg_df.to_csv(results_dir / "faithfulness_per_label.csv", index=False)
     
+    # Per confidence band aggregation
+    conf_agg_records = []
+    for band in ["High", "Medium", "Low", "Unknown"]:
+        bdf = out_df[out_df["ConfBand"] == band]
+        if len(bdf) > 0:
+            conf_agg_records.append({
+                "ConfBand": band,
+                "N_Stories": len(bdf),
+                "Comprehensiveness_Mean": bdf["Comprehensiveness"].mean(),
+                "Comprehensiveness_Std": bdf["Comprehensiveness"].std(),
+                "Sufficiency_Mean": bdf["Sufficiency"].mean(),
+                "Sufficiency_Std": bdf["Sufficiency"].std()
+            })
+    pd.DataFrame(conf_agg_records).to_csv(results_dir / "faithfulness_per_confidence_band.csv", index=False)
+
     overall_mean_comp = agg_df["Comprehensiveness_Mean"].mean() if len(agg_df) > 0 else 0
     print(f"\nOverall Mean Comprehensiveness: {overall_mean_comp:.4f}")
     if overall_mean_comp > 0.20:

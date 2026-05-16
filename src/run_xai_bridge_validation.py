@@ -18,7 +18,6 @@ from req_ambiguity.xai.bridge import PlaceholderBridge
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--dry-run", action="store_true", help="Run on just 10 stories")
     args = parser.parse_args()
 
     root = find_project_root()
@@ -28,7 +27,8 @@ def main():
     print(f"Using device: {device}")
 
     model, test_loader, label_cols = load_model_and_data(cfg, root, device)
-    tokenizer = test_loader.dataset.tokenizer
+    from transformers import AutoTokenizer
+    tokenizer = AutoTokenizer.from_pretrained(cfg["model_name"])
 
     explainer = AmbiguityExplainer(model, tokenizer, device, label_cols)
     bridge = PlaceholderBridge()
@@ -39,8 +39,6 @@ def main():
         return
         
     df = pd.read_csv(sample_b_path)
-    if args.dry_run:
-        df = df.head(10)
 
     results_dir = root / "outputs/xai/results"
     results_dir.mkdir(parents=True, exist_ok=True)
@@ -56,7 +54,7 @@ def main():
         for label in tp_labels:
             prob = row.get(f"prob_{label}", 0.0)
             
-            top_k_evidence = explainer.top_evidence_tokens(text, label, top_k=5)
+            top_k_evidence = explainer.top_evidence_tokens(text, label, top_k=5, story_id=str(story_id))
             selections = bridge.match_evidence(label, top_k_evidence)
             
             matched_triggers = []
