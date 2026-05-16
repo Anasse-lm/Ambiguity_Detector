@@ -141,6 +141,9 @@ def main():
             })
     pd.DataFrame(conf_agg_records).to_csv(results_dir / "faithfulness_per_confidence_band.csv", index=False)
 
+    print("\nFaithfulness Metrics per Label:")
+    print(agg_df.to_string())
+    
     overall_mean_comp = agg_df["Comprehensiveness_Mean"].mean() if len(agg_df) > 0 else 0
     print(f"\nOverall Mean Comprehensiveness: {overall_mean_comp:.4f}")
     if overall_mean_comp > 0.20:

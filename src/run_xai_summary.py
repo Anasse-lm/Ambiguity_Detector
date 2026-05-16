@@ -114,6 +114,8 @@ def main():
             mean_overlap["Label2"] = mean_overlap["Pair"].apply(lambda x: x[1])
             mean_overlap.drop(columns=["Pair"], inplace=True)
             mean_overlap.to_csv(results_dir / "cross_label_overlap.csv", index=False)
+            print("\nCross-Label Overlap Summary:")
+            print(mean_overlap.to_string())
 
     print("Summary generation complete.")
 
