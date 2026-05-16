@@ -8,8 +8,11 @@ if [ ! -f "remote_outputs_transfer.zip" ]; then
     exit 1
 fi
 
-echo "Unzipping outputs..."
+echo "Unzipping lightweight outputs (metadata, thresholds, figures, reports)..."
 unzip -o remote_outputs_transfer.zip
 
-echo "Unzip complete! The outputs directory is now populated."
-echo "You can now run the XAI pipeline with: !bash run_xai_pipeline.sh"
+echo "Unzip complete!"
+echo "Now run the following command to link your massive model checkpoint:"
+echo "cp outputs/seed_42/checkpoints/best_model.pt outputs/checkpoints/best_model.pt"
+echo ""
+echo "After that, you can run the XAI pipeline with: !bash run_xai_pipeline.sh"
