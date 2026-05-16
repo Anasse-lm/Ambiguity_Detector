@@ -9,3 +9,5 @@ __pycache__/
 /outputs/
 outputs/
 *.zip
+model_part_*
+remote_outputs_part_*
