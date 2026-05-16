@@ -1,4 +1,5 @@
 #!/bin/bash
+set -e
 start_total=$(date +%s)
 mkdir -p outputs/xai
 echo "Starting XAI Pipeline execution..." > outputs/xai/TIMING_REPORT.txt
