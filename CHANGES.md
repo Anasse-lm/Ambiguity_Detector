@@ -48,3 +48,51 @@ The session logging mechanism records every user interaction in a structured SQL
 - Enforces six critical rules: no fact invention, restricted placeholder vocabulary, evidence-token grounding, structure preservation, IEEE 29148 quality criteria, and strictly formatted JSON output.
 - Incorporates domain conventions explicitly excluding common software engineering verbs and "shall" from being flagged as ambiguous.
 - Added `src/debug/test_prompt_assembly.py` utility for inspecting the assembled prompt without querying the LLM.
+
+# Phase 11: Structural-Template-Attribution Diagnostic
+
+## Implementation Summary
+- Added `configs/structural_tokens.yaml` listing 23 English user-story template scaffold tokens (as, a, an, the, i, want, to, so, that, in, order, for, of, be, able, and special tokens [CLS]/[SEP]/[PAD]/[UNK]).
+- Added `src/req_ambiguity/xai/attribution_diagnostic.py` implementing `AttributionDiagnostic` class:
+  - Computes structural-vs-content attribution fraction from per-token IG scores.
+  - Prints a formatted terminal report per story (token counts, attribution mass split, per-label breakdown, top-5 filtered/unfiltered evidence tokens, HEALTHY/BORDERLINE/WARNING assessment).
+  - Thresholds: ≤33% structural = HEALTHY, 33–50% = BORDERLINE, >50% = WARNING.
+  - Returns a diagnostic dict for optional session logging.
+- Modified `src/req_ambiguity/xai/bridge.py`:
+  - Loads `structural_tokens.yaml` at `__init__` time.
+  - Filters structural tokens from IG evidence before trigger-map lookup in both `match_evidence()` and `select_placeholders()`.
+  - Prints stdout log of filtered tokens for traceability.
+- Wired diagnostic into `app/streamlit_demo.py` after the XAI step, logging results to the session DB under `STORY_DIAGNOSTIC` event type.
+- Added `src/debug/test_diagnostic.py` for batch inspection of three sample XAI files.
+- Verified: `outputs/debug/diagnostic_samples.txt` generated successfully with three reports.
+
+# Phase 12: Structural Token Filter Audit and Strengthening
+
+## Issues Found
+- Original `structural_tokens.yaml` had only 23 entries; punctuation tokens (`,`),
+  modal verbs (`can`, `have`, `will`), and pronouns (`it`, `this`, `they`) leaked through.
+- Normalization function did not strip punctuation, so `","` was never matched.
+- Trigger map had no documentation of structural-override entries.
+
+## Changes Made
+- **`configs/structural_tokens.yaml`**: Expanded from 23 to 52+ entries. Added pronouns,
+  modals, auxiliaries, connectors, punctuation, and special tokens. Added explanatory
+  header documenting the precedence rule and intentional optionality-trigger overlap.
+- **`src/req_ambiguity/xai/bridge.py`**: Full rewrite with robust `normalize_token()`
+  (strips BPE prefixes + punctuation), pre-normalized structural set at init,
+  `_filter_structural()` helper, and verbose per-label `_print_filter_report()`.
+- **`configs/trigger_map.yaml`**: Added `# NOTE: filtered by structural_tokens.yaml`
+  comments to 10 overlapping trigger entries (may, should, could, if, when, while,
+  with, it, this, they).
+
+## Verification Results (30 stories)
+- Mean structural tokens filtered per story: **7.53**
+- Bridge fill rate: **100%** (0 of 30 stories returned empty selections)
+- Top filtered tokens: `as` (54), `a` (46), `,` as empty string (37), `to` (33)
+- Per-label dominant selections: `<TBD_ROLE>` (ActorAmbiguity), `<TBD_SCOPE_ENTITY>`
+  (ScopeAmbiguity), `<TBD_ACTION_SPECIFICATION>` (SemanticAmbiguity)
+
+## New Debug Files
+- `outputs/debug/filter_audit_report.txt`
+- `outputs/debug/filter_verification_report.txt`
+- `src/debug/verify_filter.py`

@@ -1,0 +1,148 @@
+# structural_tokens.yaml — v1.1
+#
+# English user-story structural template tokens.
+#
+# PURPOSE
+# -------
+# These tokens appear in nearly every user story as scaffolding, not as
+# ambiguity-driving content. The PlaceholderBridge filters them from IG
+# evidence lists BEFORE the trigger-map lookup, ensuring placeholder
+# selection is driven by substantive content tokens only.
+#
+# PRECEDENCE RULE
+# ---------------
+# The structural filter takes precedence over trigger_map.yaml.
+# If a token appears in BOTH this list AND a trigger_map.yaml entry,
+# the filter removes it before the trigger lookup fires.
+#
+# INTENTIONAL OVERLAP WITH OPTIONALITY TRIGGERS
+# ----------------------------------------------
+# Words like "may", "could", "should", "would" appear in
+# trigger_map.yaml as <TBD_QUALIFIER> triggers (CL2014 PRIMARY evidence).
+# They are ALSO included here because in a user-story template context
+# ("As a user, I would like to...") these words occupy the TEMPLATE
+# SCAFFOLD position, not an ambiguity-indicating position.
+# The structural filter removes them so they don't spuriously activate
+# <TBD_QUALIFIER>. The trigger entries remain in trigger_map.yaml for
+# academic documentation but are marked as structurally overridden.
+#
+# Similarly "if", "when", "while" are <TBD_PRECONDITION> triggers but
+# also appear as structural connectors in user stories.
+#
+# TOKEN NORMALIZATION
+# -------------------
+# All entries below are stored as lowercase plain strings (no BPE prefix).
+# The bridge applies normalize_token() to both the evidence tokens and
+# this list before comparison, stripping ▁, ##, Ġ prefixes and
+# lowercasing. Entries here should be written in their plain form.
+
+structural_tokens:
+  # ---- Articles and subject markers ----
+  - "as"
+  - "a"
+  - "an"
+  - "the"
+
+  # ---- Personal pronouns ----
+  - "i"
+  - "me"
+  - "my"
+  - "we"
+  - "our"
+  - "us"
+  - "you"
+  - "your"
+  - "yours"
+  - "he"
+  - "she"
+  - "it"
+  - "its"
+  - "they"
+  - "their"
+  - "them"
+
+  # ---- Intent / modal / auxiliary verbs (template position) ----
+  - "want"
+  - "wants"
+  - "wanted"
+  - "would"
+  - "could"
+  - "should"
+  - "may"
+  - "might"
+  - "must"
+  - "like"
+  - "likes"
+  - "liked"
+  - "need"
+  - "needs"
+  - "needed"
+  - "have"
+  - "has"
+  - "had"
+  - "having"
+  - "be"
+  - "is"
+  - "are"
+  - "was"
+  - "were"
+  - "being"
+  - "been"
+  - "do"
+  - "does"
+  - "did"
+  - "can"
+  - "will"
+
+  # ---- Structural connectors and prepositions ----
+  - "to"
+  - "of"
+  - "in"
+  - "on"
+  - "at"
+  - "by"
+  - "with"
+  - "from"
+  - "for"
+  - "so"
+  - "that"
+  - "this"
+  - "these"
+  - "those"
+  - "and"
+  - "or"
+  - "but"
+  - "not"
+  - "if"
+  - "then"
+  - "when"
+  - "where"
+  - "while"
+  - "order"
+  - "able"
+  - "way"
+  - "into"
+  - "up"
+  - "out"
+
+  # ---- Punctuation artifacts ----
+  - ","
+  - "."
+  - ";"
+  - ":"
+  - "!"
+  - "?"
+  - "'"
+  - "\""
+  - "-"
+
+  # ---- Special tokenizer tokens ----
+  - "[cls]"
+  - "[sep]"
+  - "[pad]"
+  - "[unk]"
+  - "[mask]"
+  - "<s>"
+  - "</s>"
+  - "<pad>"
+  - "<unk>"

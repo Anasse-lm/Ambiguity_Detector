@@ -199,7 +199,8 @@ version: "1.2"
     - {word: admin,    source: empirical}
     - {word: person,   source: empirical}
     - {word: someone,  source: empirical}
-    # --- v1.1 literature additions ---
+    # NOTE: filtered by structural_tokens.yaml — appears here for documentation
+    #       (AP2022 PRIMARY evidence) but does not fire in practice.
     - {word: they,     source: literature, source_citation: AP2022, evidence: DERIVED}
     - {word: it,       source: literature, source_citation: AP2022, evidence: DERIVED}
     - {word: this,     source: literature, source_citation: AP2022, evidence: DERIVED}
@@ -281,6 +282,7 @@ version: "1.2"
     - {word: via,           source: empirical}
     - {word: through,       source: empirical}
     - {word: using,         source: empirical}
+    # NOTE: "with" is filtered by structural_tokens.yaml and does not fire in practice.
     - {word: with,          source: empirical}
     - {word: integrated,    source: literature, source_citation: AmbiTRUS, evidence: DERIVED}
     - {word: connected,     source: literature, source_citation: AmbiTRUS, evidence: DERIVED}
@@ -294,6 +296,8 @@ version: "1.2"
 
 "<TBD_PRECONDITION>":
   triggers:
+    # NOTE: "when", "if", "while" are in structural_tokens.yaml and filtered before
+    #       trigger lookup. Listed here for documentation only (empirical + EARS 2009).
     - {word: when,    source: empirical}
     - {word: if,      source: empirical}
     - {word: before,  source: empirical}
@@ -327,6 +331,9 @@ version: "1.2"
     - {word: "nice-to-have", source: literature, source_citation: AmbiTRUS, evidence: DERIVED}
     # --- v1.2 verified additions: NASA ARM options/modal verbs (Carlson and Laplante 2014, Sec. 3.3.4, p. 83) ---
     - {word: can,         source: literature, source_citation: CL2014, evidence: PRIMARY, corroborator: B2022}
+    # NOTE: "may", "should", "could" are in structural_tokens.yaml (intent/modal verbs
+    #       in template position). They appear here per CL2014 PRIMARY evidence but are
+    #       filtered before trigger lookup. Structural filter takes precedence.
     - {word: may,         source: literature, source_citation: CL2014, evidence: PRIMARY, corroborator: B2022}
     - {word: optionally,  source: literature, source_citation: CL2014, evidence: PRIMARY, corroborator: B2022}
     # --- v1.2 verified additions: NASA ARM weak imperatives (Table 3, p. 82) ---

@@ -35,6 +35,7 @@ from req_ambiguity.refinement.validator import RefinementValidator
 from req_ambiguity.refinement.refiner import Refiner
 from req_ambiguity.verification.verifier import Verifier
 from req_ambiguity.xai.visualization import render_html_heatmap
+from req_ambiguity.xai.attribution_diagnostic import AttributionDiagnostic
 
 from req_ambiguity.session.session_log import SessionLog
 from req_ambiguity.session.input_ingestion import (
@@ -130,6 +131,10 @@ def load_placeholder_bridge():
 model, tokenizer, thresholds, label_cols, device = load_classifier_and_tokenizer()
 explainer = load_xai_explainer()
 bridge = load_placeholder_bridge()
+
+@st.cache_resource
+def load_attribution_diagnostic():
+    return AttributionDiagnostic()
 
 # Setup Refiner
 def get_refiner():
@@ -265,6 +270,19 @@ def run_pipeline(story_text, is_regeneration=False, old_outputs=None):
                     "top_evidence_tokens": attributions['top_evidence_tokens']
                 }
             outputs['xai'] = xai_results
+
+            # --- Structural-attribution diagnostic (terminal only) ---
+            try:
+                diagnostic = load_attribution_diagnostic()
+                diag_result = diagnostic.analyze_and_print(xai_results, story_text)
+                if diag_result:
+                    st.session_state.session_log.log_event(
+                        st.session_state.current_session_id,
+                        "STORY_DIAGNOSTIC",
+                        diag_result,
+                    )
+            except Exception as _diag_exc:
+                print(f"[AttributionDiagnostic] Skipped: {_diag_exc}", flush=True)
             
             # Bridge
             bridge_selections = []
