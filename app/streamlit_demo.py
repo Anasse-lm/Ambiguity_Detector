@@ -82,7 +82,9 @@ def init_state():
         'current_story_text': "",
         'current_pipeline_outputs': {},
         'regeneration_count_for_current_story': 0,
-        'session_active': False
+        'session_active': False,
+        'followup_result': None,
+        'followup_verification': None,
     }
     for k, v in defaults.items():
         if k not in st.session_state:
@@ -162,6 +164,8 @@ def start_new_session(input_mode):
     st.session_state.current_story_id = None
     st.session_state.current_story_text = ""
     st.session_state.current_pipeline_outputs = {}
+    st.session_state.followup_result = None
+    st.session_state.followup_verification = None
     st.session_state.regeneration_count_for_current_story = 0
     st.session_state.session_active = True
 
@@ -316,62 +320,67 @@ def run_pipeline(story_text, is_regeneration=False, old_outputs=None):
             st.session_state.session_log.log_event(st.session_state.current_session_id, "ERROR", {"stage": "xai", "error": str(e)})
             st.error("Could not generate explanation visualization. The story was classified successfully but attribution failed.")
             
-    # 3. Refinement
-    if outputs.get('active_labels'):
-        try:
-            if not st.session_state.api_key:
-                st.error("Refinement is unavailable: Missing API key. Please check your API key and connection.")
-                return outputs
-                
-            os.environ["GEMINI_API_KEY"] = st.session_state.api_key
+    return outputs
+
+def run_refinement(story_text, outputs, is_regeneration=False):
+    if not outputs.get('active_labels'):
+        return outputs
+        
+    try:
+        if not st.session_state.api_key:
+            st.error("Refinement is unavailable: Missing API key. Please check your API key and connection.")
+            return outputs
             
-            refiner = get_refiner()
+        os.environ["GEMINI_API_KEY"] = st.session_state.api_key
+        
+        refiner = get_refiner()
+        
+        prompt = refiner.prompt_builder.build_prompt(
+            original_story=story_text,
+            active_labels=outputs['active_labels'],
+            evidence_tokens=outputs.get('bridge_evidence_tokens', []),
+            allowed_placeholders=outputs.get('bridge_allowed_placeholders', [])
+        )
+        
+        if is_regeneration:
+            prompt += "\n\nThe previous refinement was rejected. Please propose an alternative refinement using the same placeholder vocabulary but with different word choices or phrasing."
             
-            prompt = refiner.prompt_builder.build_prompt(
-                original_story=story_text,
-                active_labels=outputs['active_labels'],
-                evidence_tokens=outputs.get('bridge_evidence_tokens', []),
-                allowed_placeholders=outputs.get('bridge_allowed_placeholders', [])
-            )
-            
-            if is_regeneration:
-                prompt += "\n\nThe previous refinement was rejected. Please propose an alternative refinement using the same placeholder vocabulary but with different word choices or phrasing."
-                
-            request = RefinementRequest(
-                prompt_text=prompt,
-                model_name=refiner.config.get('model_name', 'gemini-1.5-pro'),
-                temperature=refiner.config.get('temperature', 0.2),
-                max_output_tokens=refiner.config.get('max_output_tokens', 1024),
-                top_p=refiner.config.get('top_p', 0.9)
-            )
-            
-            response = refiner.backend.call(request)
+        from req_ambiguity.refinement.backends.base import RefinementRequest
+        request = RefinementRequest(
+            prompt_text=prompt,
+            model_name=refiner.config.get('model_name', 'gemini-1.5-pro'),
+            temperature=refiner.config.get('temperature', 0.2),
+            max_output_tokens=refiner.config.get('max_output_tokens', 1024),
+            top_p=refiner.config.get('top_p', 0.9)
+        )
+        
+        response = refiner.backend.call(request)
+
+        # Detect truncated response before validating
+        finish_reason = getattr(getattr(response, 'raw_response', None), 'finish_reason', None)
+        if finish_reason and 'MAX_TOKENS' in str(finish_reason):
+            print("[Refinement] WARNING: response truncated (MAX_TOKENS).", flush=True)
+            outputs['refinement'] = {"error": "Response truncated (token limit hit). Increase max_output_tokens in refinement.yaml."}
+        else:
             validated = refiner.validator.validate(response.text)
-            
+            print(f"[Refinement] passed={validated.passed} | illegal={validated.illegal_placeholders} | schema={validated.schema_errors} | parse_err={validated.parse_error}", flush=True)
+
             if validated.passed:
                 outputs['refinement'] = validated.parsed_json
                 st.session_state.session_log.log_event(st.session_state.current_session_id, "REFINEMENT_GENERATED", {"status": "success", "is_regeneration": is_regeneration})
             else:
-                outputs['refinement'] = {"error": "Failed validation rules."}
-        except Exception as e:
-            st.session_state.session_log.log_event(st.session_state.current_session_id, "ERROR", {"stage": "refinement", "error": str(e)})
-            st.error(f"Refinement is unavailable: {str(e)}. Please check your API key and connection.")
-            return outputs
-            
-    # 4. Verification
-    if 'refinement' in outputs and 'refined_story' in outputs['refinement']:
-        try:
-            v_res = verifier.verify(story_text, outputs['refinement']['refined_story'])
-            outputs['verification'] = {
-                "aggregate_delta": v_res.aggregate_delta,
-                "improved": v_res.improved,
-                "probs_before": [float(p) for p in v_res.probs_before],
-                "probs_after": [float(p) for p in v_res.probs_after]
-            }
-        except Exception as e:
-            st.session_state.session_log.log_event(st.session_state.current_session_id, "ERROR", {"stage": "verification", "error": str(e)})
-            st.error("Could not compute before/after verification.")
-            
+                detail = []
+                if validated.parse_error:
+                    detail.append(f"JSON parse error: {validated.parse_error}")
+                if validated.schema_errors:
+                    detail.append(f"Schema: {'; '.join(validated.schema_errors)}")
+                if validated.illegal_placeholders:
+                    detail.append(f"Illegal placeholders used by LLM: {validated.illegal_placeholders}")
+                outputs['refinement'] = {"error": " | ".join(detail) or "Unknown validation failure"}
+    except Exception as e:
+        st.session_state.session_log.log_event(st.session_state.current_session_id, "ERROR", {"stage": "refinement", "error": str(e)})
+        st.error(f"Refinement is unavailable: {str(e)}. Please check your API key and connection.")
+        
     return outputs# Input Area
 validation_warnings = []
 trigger_batch = False
@@ -399,7 +408,7 @@ if input_mode == "Single story":
     current_val = st.session_state.get('quick_fill', "")
     story_input = st.text_area("User Story", value=current_val, height=100, placeholder="e.g. As a user, I want to update records...")
     
-    if st.button("🔍 Analyze and Refine", type="primary", disabled=not st.session_state.api_key, help="Enter your Gemini API key in the sidebar to enable analysis."):
+    if st.button("🔍 Analyze & Detect Ambiguity", type="primary", disabled=not st.session_state.api_key, help="Enter your Gemini API key in the sidebar to enable analysis."):
         st.session_state.story_queue = [{"id": str(uuid.uuid4()), "text": story_input.strip()}]
         st.session_state.current_queue_position = 0
         trigger_batch = True
@@ -450,6 +459,8 @@ if trigger_batch and st.session_state.story_queue:
     st.session_state.current_story_id = first_item['id']
     st.session_state.current_story_text = first_item['text']
     st.session_state.regeneration_count_for_current_story = 0
+    st.session_state.followup_result = None  # clear any previous Q&A result
+    st.session_state.followup_verification = None
     hardware_name = "Apple Silicon GPU (MPS)" if device.type == 'mps' else "NVIDIA GPU" if device.type == 'cuda' else "CPU"
     with st.spinner(f"Processing your story — running hardware acceleration on {hardware_name}."):
         outputs = run_pipeline(first_item['text'])
@@ -514,31 +525,58 @@ if st.session_state.current_story_text and st.session_state.current_pipeline_out
                         st.markdown("<br>", unsafe_allow_html=True)
         st.markdown('</div>', unsafe_allow_html=True)
                         
-        st.markdown('<div class="custom-card"><h3>Refined Story</h3>', unsafe_allow_html=True)
-        col1, col2 = st.columns(2)
-        with col1:
-            st.markdown('<div class="story-box"><div class="story-box-title">Original Story</div>', unsafe_allow_html=True)
-            st.write(st.session_state.current_story_text)
+        # ── Refinement Suggestion trigger ──────────────────
+        if outputs.get('active_labels') and 'refinement' not in outputs:
+            st.markdown('<div class="custom-card" style="text-align: center; padding: 30px;">', unsafe_allow_html=True)
+            st.markdown("<h3>🎯 Propose Template-Driven Refinement</h3>", unsafe_allow_html=True)
+            st.write(
+                "The neural model has successfully labeled the ambiguity and identified the active scaffolding tokens. "
+                "Click below to let Gemini analyze this diagnostic metadata and construct a structured template-driven refinement proposal."
+            )
+            if st.button("✨ Propose Refinement Plan", type="primary"):
+                with st.spinner("Calling LLM to generate placeholder-filled refinement plan…"):
+                    outputs = run_refinement(st.session_state.current_story_text, outputs)
+                    st.session_state.current_pipeline_outputs = outputs
+                    st.rerun()
             st.markdown('</div>', unsafe_allow_html=True)
-            
-        with col2:
-            st.markdown('<div class="story-box"><div class="story-box-title">Refined Story</div>', unsafe_allow_html=True)
-            if 'refinement' in outputs and 'refined_story' in outputs['refinement']:
-                ref_text = outputs['refinement']['refined_story']
-                # Highlight placeholders
-                for p in bridge.vocabulary:
-                    ref_text = ref_text.replace(p, f"<span class='placeholder-highlight'>{p}</span>")
-                st.markdown(ref_text, unsafe_allow_html=True)
-            st.markdown('</div>', unsafe_allow_html=True)
+
+        if 'refinement' in outputs:
+            st.markdown('<div class="custom-card"><h3>Refined Story</h3>', unsafe_allow_html=True)
+            col1, col2 = st.columns(2)
+            with col1:
+                st.markdown('<div class="story-box"><div class="story-box-title">Original Story</div>', unsafe_allow_html=True)
+                st.write(st.session_state.current_story_text)
+                st.markdown('</div>', unsafe_allow_html=True)
                 
+            with col2:
+                st.markdown('<div class="story-box"><div class="story-box-title">Refined Story</div>', unsafe_allow_html=True)
+                if 'refined_story' in outputs['refinement']:
+                    ref_text = outputs['refinement']['refined_story']
+                    # Highlight every placeholder that was actually inserted
+                    placeholders_to_highlight = outputs['refinement'].get('placeholders_used', [])
+                    for p in placeholders_to_highlight:
+                        ref_text = ref_text.replace(
+                            p,
+                            f"<span class='placeholder-highlight'>{p}</span>"
+                        )
+                    st.markdown(ref_text, unsafe_allow_html=True)
+                elif 'error' in outputs['refinement']:
+                    st.warning(f"⚠ Refinement could not be validated: {outputs['refinement']['error']}")
+                else:
+                    st.info("Refinement output pending or unavailable.")
+                st.markdown('</div>', unsafe_allow_html=True)
+            st.markdown('</div>', unsafe_allow_html=True)
+
+        # ── Placeholders + Interactive Clarification Q&A ──────────────────
         if 'refinement' in outputs and 'placeholders_used' in outputs['refinement']:
-            st.markdown("**Placeholders inserted:**")
-            # Build compact chips with description from config
-            _pb_descriptions = getattr(get_refiner().prompt_builder, 'placeholder_descriptions', {})
+            st.markdown('<div class="custom-card">', unsafe_allow_html=True)
+
+            # Placeholder chips with full description
+            _pb_meta = getattr(get_refiner().prompt_builder, 'placeholder_metadata', {})
+            _pb_desc = getattr(get_refiner().prompt_builder, 'placeholder_descriptions', {})
             ph_chips = []
             for p in outputs['refinement']['placeholders_used']:
-                desc = _pb_descriptions.get(p, "")
-                # Truncate long descriptions to keep chip compact
+                desc = _pb_desc.get(p, "")
                 short_desc = (desc[:90] + "\u2026") if len(desc) > 90 else desc
                 ph_chips.append(
                     f"<span class='placeholder-chip'>"
@@ -546,121 +584,260 @@ if st.session_state.current_story_text and st.session_state.current_pipeline_out
                     f"<span class='ph-desc'>{short_desc}</span>"
                     f"</span>"
                 )
-            st.markdown("".join(ph_chips), unsafe_allow_html=True)
+            if ph_chips:
+                st.markdown("**Placeholders inserted:**")
+                st.markdown("".join(ph_chips), unsafe_allow_html=True)
+
+            # ── Clarification Q&A form ────────────────────────────────────
+            clarification_qs = outputs['refinement'].get('clarification_questions', [])
+            if clarification_qs:
+                st.markdown("---")
+                st.markdown("#### 💬 Clarification Questions")
+                st.caption(
+                    "Answer any questions below to replace placeholders with real values. "
+                    "Leave blank to keep the placeholder."
+                )
+
+                # Collect answers via text inputs (keyed by story_id + question index)
+                user_answers = {}
+                sid = st.session_state.get('current_story_id', 'default')
+                for i, q in enumerate(clarification_qs):
+                    answer = st.text_input(
+                        label=f"Q{i+1}: {q}",
+                        key=f"clarify_{sid}_{i}",
+                        placeholder="Type your answer here…",
+                    )
+                    user_answers[q] = answer
+
+                # Show final resolved story if we already have one
+                if st.session_state.get('followup_result'):
+                    fr = st.session_state.followup_result
+                    st.markdown("#### ✅ Final Resolved Story")
+                    final_html = fr.get('final_story', '')
+                    for rem in fr.get('remaining_placeholders', []):
+                        final_html = final_html.replace(
+                            rem,
+                            f"<span class='placeholder-highlight'>{rem}</span>"
+                        )
+                    st.markdown(
+                        f"<div class='story-box'>{final_html}</div>",
+                        unsafe_allow_html=True,
+                    )
+                    if fr.get('resolution_summary'):
+                        st.caption(f"📋 {fr['resolution_summary']}")
+                    if fr.get('remaining_placeholders'):
+                        st.info(f"Still unresolved: {', '.join(fr['remaining_placeholders'])}")
+
+                # Apply Answers button
+                any_answered = any(v.strip() for v in user_answers.values())
+                if st.button(
+                    "🔄 Apply Answers & Resolve Placeholders",
+                    disabled=not any_answered,
+                    help="Provide at least one answer above to enable this button.",
+                ):
+                    with st.spinner("Asking Gemini to resolve placeholders with your answers…"):
+                        try:
+                            refiner = get_refiner()
+                            followup_prompt = refiner.prompt_builder.build_followup_prompt(
+                                original_story=st.session_state.current_story_text,
+                                refined_story=outputs['refinement']['refined_story'],
+                                clarification_questions=clarification_qs,
+                                user_answers=user_answers,
+                            )
+                            from req_ambiguity.refinement.backends.base import RefinementRequest
+                            import json as _json
+                            fu_request = RefinementRequest(
+                                prompt_text=followup_prompt,
+                                model_name=refiner.config.get('model_name', 'gemini-2.5-flash'),
+                                temperature=0.1,
+                                max_output_tokens=1024,
+                                top_p=0.9,
+                            )
+                            fu_response = refiner.backend.call(fu_request)
+                            raw = fu_response.text.strip()
+                            import re as _re
+                            
+                            def parse_robust_json(text):
+                                raw_text = text.strip()
+                                raw_text = _re.sub(r"^```json\s*|\s*```$", "", raw_text, flags=_re.MULTILINE).strip()
+                                raw_text = _re.sub(r"^```\s*|\s*```$", "", raw_text, flags=_re.MULTILINE).strip()
+                                
+                                # Find first { and last }
+                                start_idx = raw_text.find('{')
+                                end_idx = raw_text.rfind('}')
+                                if start_idx != -1 and end_idx != -1:
+                                    raw_text = raw_text[start_idx:end_idx+1]
+                                    
+                                try:
+                                    return _json.loads(raw_text)
+                                except _json.JSONDecodeError:
+                                    # Regex fallback for final_story
+                                    fs_match = _re.search(r'"final_story"\s*:\s*"(.*?)"\s*(?:,|\})', raw_text, _re.DOTALL)
+                                    if not fs_match:
+                                        fs_match = _re.search(r'"final_story"\s*:\s*"(.*)"\s*,\s*"remaining_placeholders"', raw_text, _re.DOTALL)
+                                    final_story = fs_match.group(1).strip() if fs_match else ""
+                                    
+                                    # Regex fallback for resolution_summary
+                                    rs_match = _re.search(r'"resolution_summary"\s*:\s*"(.*?)"\s*(?:,|\})', raw_text, _re.DOTALL)
+                                    if not rs_match:
+                                        rs_match = _re.search(r'"resolution_summary"\s*:\s*"(.*)"', raw_text, _re.DOTALL)
+                                    resolution_summary = rs_match.group(1).strip() if rs_match else ""
+                                    
+                                    # Regex fallback for remaining placeholders
+                                    rp_match = _re.search(r'"remaining_placeholders"\s*:\s*\[(.*?)\]', raw_text, _re.DOTALL)
+                                    remaining_placeholders = []
+                                    if rp_match:
+                                        remaining_placeholders = _re.findall(r'"(.*?)"', rp_match.group(1))
+                                        
+                                    if final_story:
+                                        return {
+                                            "final_story": final_story,
+                                            "remaining_placeholders": remaining_placeholders,
+                                            "resolution_summary": resolution_summary
+                                        }
+                                    raise
+
+                            fu_json = parse_robust_json(raw)
+                            st.session_state.followup_result = fu_json
+                            
+                            # Run verification dynamically on the resolved concrete story vs original
+                            if 'final_story' in fu_json:
+                                try:
+                                    v_res = verifier.verify(st.session_state.current_story_text, fu_json['final_story'])
+                                    st.session_state.followup_verification = {
+                                        "aggregate_delta": v_res.aggregate_delta,
+                                        "improved": v_res.improved,
+                                        "probs_before": [float(p) for p in v_res.probs_before],
+                                        "probs_after": [float(p) for p in v_res.probs_after]
+                                    }
+                                except Exception as _v_err:
+                                    print(f"[Verification Error] {_v_err}", flush=True)
+                            
+                            st.rerun()
+                        except Exception as _fu_err:
+                            st.error(f"Follow-up failed: {_fu_err}")
+
+            st.markdown('</div>', unsafe_allow_html=True)
                 
-            st.markdown("**Clarification questions:**")
-            for i, q in enumerate(outputs['refinement'].get('clarification_questions', [])):
-                st.markdown(f"{i+1}. {q}")
-        st.markdown('</div>', unsafe_allow_html=True)
-                
-        # Verification
-        if 'verification' in outputs:
+        # Verification (Only show after Q&A answers have been applied and followup_verification is present)
+        if st.session_state.get('followup_verification'):
+            v_data = st.session_state.followup_verification
             st.markdown('<div class="custom-card"><h3>Ambiguity Reduction</h3>', unsafe_allow_html=True)
             df_ver = pd.DataFrame({
-                "Before": outputs['verification']['probs_before'],
-                "After": outputs['verification']['probs_after']
+                "Before": v_data['probs_before'],
+                "After": v_data['probs_after']
             }, index=[l.replace('Ambiguity', '') for l in label_cols])
             st.bar_chart(df_ver)
             
-            delta = outputs['verification']['aggregate_delta']
+            delta = v_data['aggregate_delta']
             st.write(f"Aggregate change: **{delta:.4f}** (negative = reduced)")
-            if outputs['verification']['improved']:
+            if v_data['improved']:
                 st.markdown("<div style='color: var(--success); font-weight: bold;'>✓ Refinement reduced ambiguity</div>", unsafe_allow_html=True)
             else:
                 st.markdown("<div style='color: var(--warning); font-weight: bold;'>⚠ Refinement did not reduce ambiguity</div>", unsafe_allow_html=True)
             st.markdown('</div>', unsafe_allow_html=True)
                 
-        st.divider()
-        
-        # Action Buttons
-        cols = st.columns(4)
-        if cols[0].button("✓ Accept"):
-            st.session_state.session_log.log_event(st.session_state.current_session_id, "REFINEMENT_ACCEPTED", {"story_id": st.session_state.current_story_id}, story_id=st.session_state.current_story_id)
-            st.session_state.session_log.update_story_status(st.session_state.current_story_id, "accepted")
-            st.success("Refinement accepted")
-            if st.session_state.current_input_mode == "Single story":
-                st.session_state.current_story_text = ""
-                st.session_state.current_pipeline_outputs = {}
-            st.rerun()
-            
-        if cols[1].button("↻ Regenerate", disabled=(st.session_state.regeneration_count_for_current_story >= demo_config['max_regenerations_per_story'])):
-            st.session_state.regeneration_count_for_current_story += 1
-            st.session_state.session_log.log_event(st.session_state.current_session_id, "REFINEMENT_REGENERATED", {"story_id": st.session_state.current_story_id, "attempt": st.session_state.regeneration_count_for_current_story}, story_id=st.session_state.current_story_id)
-            with st.spinner("Regenerating refinement..."):
-                outputs = run_pipeline(st.session_state.current_story_text, is_regeneration=True, old_outputs=st.session_state.current_pipeline_outputs)
-                st.session_state.current_pipeline_outputs = outputs
-            st.rerun()
-            
-        if cols[2].button("→ Skip"):
-            st.session_state.session_log.log_event(st.session_state.current_session_id, "STORY_SKIPPED", {"story_id": st.session_state.current_story_id}, story_id=st.session_state.current_story_id)
-            st.session_state.session_log.update_story_status(st.session_state.current_story_id, "skipped")
-            
-            if st.session_state.current_input_mode != "Single story":
-                st.session_state.current_queue_position += 1
-                if st.session_state.current_queue_position < len(st.session_state.story_queue):
-                    next_item = st.session_state.story_queue[st.session_state.current_queue_position]
-                    st.session_state.current_story_id = next_item['id']
-                    st.session_state.current_story_text = next_item['text']
-                    st.session_state.regeneration_count_for_current_story = 0
-                    with st.spinner("Processing next story..."):
-                        outputs = run_pipeline(next_item['text'])
-                        st.session_state.current_pipeline_outputs = outputs
-                        st.session_state.session_log.log_story(st.session_state.current_session_id, next_item['id'], next_item['text'], outputs, st.session_state.current_batch_id, st.session_state.current_queue_position)
-                else:
-                    st.session_state.session_log.log_event(st.session_state.current_session_id, "BATCH_COMPLETED", {"batch_id": st.session_state.current_batch_id})
+        # Action Buttons (Only show after Q&A answers have been applied)
+        if st.session_state.get('followup_result'):
+            st.divider()
+            cols = st.columns(4)
+            if cols[0].button("✓ Accept"):
+                st.session_state.session_log.log_event(st.session_state.current_session_id, "REFINEMENT_ACCEPTED", {"story_id": st.session_state.current_story_id}, story_id=st.session_state.current_story_id)
+                st.session_state.session_log.update_story_status(st.session_state.current_story_id, "accepted")
+                st.success("Refinement accepted")
+                if st.session_state.current_input_mode == "Single story":
                     st.session_state.current_story_text = ""
                     st.session_state.current_pipeline_outputs = {}
-                    st.success("Batch complete!")
-            else:
-                st.session_state.current_story_text = ""
-                st.session_state.current_pipeline_outputs = {}
-            st.rerun()
-            
-        if st.session_state.current_input_mode != "Single story":
-            if cols[3].button("Next Story →"):
-                st.session_state.current_queue_position += 1
-                if st.session_state.current_queue_position < len(st.session_state.story_queue):
-                    next_item = st.session_state.story_queue[st.session_state.current_queue_position]
-                    st.session_state.current_story_id = next_item['id']
-                    st.session_state.current_story_text = next_item['text']
-                    st.session_state.regeneration_count_for_current_story = 0
-                    with st.spinner("Processing next story..."):
-                        outputs = run_pipeline(next_item['text'])
-                        st.session_state.current_pipeline_outputs = outputs
-                        st.session_state.session_log.log_story(st.session_state.current_session_id, next_item['id'], next_item['text'], outputs, st.session_state.current_batch_id, st.session_state.current_queue_position)
-                else:
-                    st.session_state.session_log.log_event(st.session_state.current_session_id, "BATCH_COMPLETED", {"batch_id": st.session_state.current_batch_id})
-                    st.session_state.current_story_text = ""
-                    st.session_state.current_pipeline_outputs = {}
-                    st.success("Batch complete!")
+                st.session_state.followup_result = None
+                st.session_state.followup_verification = None
                 st.rerun()
+                
+            if cols[1].button("↻ Regenerate", disabled=(st.session_state.regeneration_count_for_current_story >= demo_config['max_regenerations_per_story'])):
+                st.session_state.regeneration_count_for_current_story += 1
+                st.session_state.session_log.log_event(st.session_state.current_session_id, "REFINEMENT_REGENERATED", {"story_id": st.session_state.current_story_id, "attempt": st.session_state.regeneration_count_for_current_story}, story_id=st.session_state.current_story_id)
+                with st.spinner("Regenerating refinement..."):
+                    outputs = run_refinement(st.session_state.current_story_text, st.session_state.current_pipeline_outputs, is_regeneration=True)
+                    st.session_state.current_pipeline_outputs = outputs
+                st.session_state.followup_result = None
+                st.session_state.followup_verification = None
+                st.rerun()
+                
+            if cols[2].button("→ Skip"):
+                st.session_state.session_log.log_event(st.session_state.current_session_id, "STORY_SKIPPED", {"story_id": st.session_state.current_story_id}, story_id=st.session_state.current_story_id)
+                st.session_state.session_log.update_story_status(st.session_state.current_story_id, "skipped")
+                
+                st.session_state.followup_result = None
+                st.session_state.followup_verification = None
+                
+                if st.session_state.current_input_mode != "Single story":
+                    st.session_state.current_queue_position += 1
+                    if st.session_state.current_queue_position < len(st.session_state.story_queue):
+                        next_item = st.session_state.story_queue[st.session_state.current_queue_position]
+                        st.session_state.current_story_id = next_item['id']
+                        st.session_state.current_story_text = next_item['text']
+                        st.session_state.regeneration_count_for_current_story = 0
+                        with st.spinner("Processing next story..."):
+                            outputs = run_pipeline(next_item['text'])
+                            st.session_state.current_pipeline_outputs = outputs
+                            st.session_state.session_log.log_story(st.session_state.current_session_id, next_item['id'], next_item['text'], outputs, st.session_state.current_batch_id, st.session_state.current_queue_position)
+                    else:
+                        st.session_state.session_log.log_event(st.session_state.current_session_id, "BATCH_COMPLETED", {"batch_id": st.session_state.current_batch_id})
+                        st.session_state.current_story_text = ""
+                        st.session_state.current_pipeline_outputs = {}
+                        st.success("Batch complete!")
+                else:
+                    st.session_state.current_story_text = ""
+                    st.session_state.current_pipeline_outputs = {}
+                st.rerun()
+                
+            if st.session_state.current_input_mode != "Single story":
+                if cols[3].button("Next Story →"):
+                    st.session_state.current_queue_position += 1
+                    st.session_state.followup_result = None
+                    st.session_state.followup_verification = None
+                    if st.session_state.current_queue_position < len(st.session_state.story_queue):
+                        next_item = st.session_state.story_queue[st.session_state.current_queue_position]
+                        st.session_state.current_story_id = next_item['id']
+                        st.session_state.current_story_text = next_item['text']
+                        st.session_state.regeneration_count_for_current_story = 0
+                        with st.spinner("Processing next story..."):
+                            outputs = run_pipeline(next_item['text'])
+                            st.session_state.current_pipeline_outputs = outputs
+                            st.session_state.session_log.log_story(st.session_state.current_session_id, next_item['id'], next_item['text'], outputs, st.session_state.current_batch_id, st.session_state.current_queue_position)
+                    else:
+                        st.session_state.session_log.log_event(st.session_state.current_session_id, "BATCH_COMPLETED", {"batch_id": st.session_state.current_batch_id})
+                        st.session_state.current_story_text = ""
+                        st.session_state.current_pipeline_outputs = {}
+                        st.success("Batch complete!")
+                    st.rerun()
     else:
         st.success("No ambiguity detected! This user story passes the quality threshold.")
 
 # REPORTS SECTION
-st.divider()
-st.markdown('<div class="custom-card"><h3>Export Results</h3>', unsafe_allow_html=True)
-st.write("Download your session artifacts or generated reports here.")
-cols = st.columns(4)
-
-if st.session_state.current_story_id:
-    report_bytes = per_story_report(st.session_state.current_session_id, st.session_state.current_story_id)
-    if report_bytes:
-        cols[0].download_button("📄 Per-story Report", data=report_bytes, file_name=f"report_{st.session_state.current_story_id}.docx", mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document")
+if not st.session_state.current_story_id or st.session_state.get('followup_result'):
+    st.divider()
+    st.markdown('<div class="custom-card"><h3>Export Results</h3>', unsafe_allow_html=True)
+    st.write("Download your session artifacts or generated reports here.")
+    cols = st.columns(4)
+    
+    if st.session_state.current_story_id:
+        report_bytes = per_story_report(st.session_state.current_session_id, st.session_state.current_story_id)
+        if report_bytes:
+            cols[0].download_button("📄 Per-story Report", data=report_bytes, file_name=f"report_{st.session_state.current_story_id}.docx", mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document")
+            
+    sum_bytes = session_summary_report(st.session_state.current_session_id)
+    if sum_bytes:
+        cols[1].download_button("📊 Session Summary", data=sum_bytes, file_name=f"session_summary_{st.session_state.current_session_id[:8]}.docx", mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document")
         
-sum_bytes = session_summary_report(st.session_state.current_session_id)
-if sum_bytes:
-    cols[1].download_button("📊 Session Summary", data=sum_bytes, file_name=f"session_summary_{st.session_state.current_session_id[:8]}.docx", mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document")
-    
-cq_bytes = clarification_questions_report(st.session_state.current_session_id)
-if cq_bytes:
-    cols[2].download_button("❓ Clarifications", data=cq_bytes, file_name=f"clarification_questions_{st.session_state.current_session_id[:8]}.docx", mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document")
-    
-summary = st.session_state.session_log.get_session_summary(st.session_state.current_session_id)
-if summary['accepted'] >= demo_config.get('refined_requirements_doc_min_stories', 5):
-    req_bytes = refined_requirements_report(st.session_state.current_session_id)
-    if req_bytes:
-        cols[3].download_button("📑 Refined Requirements", data=req_bytes, file_name=f"refined_requirements_{st.session_state.current_session_id[:8]}.docx", mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document")
-else:
-    cols[3].button("📑 Refined Requirements", disabled=True, help="Accept at least 5 stories to generate this report.")
-st.markdown('</div>', unsafe_allow_html=True)
+    cq_bytes = clarification_questions_report(st.session_state.current_session_id)
+    if cq_bytes:
+        cols[2].download_button("❓ Clarifications", data=cq_bytes, file_name=f"clarification_questions_{st.session_state.current_session_id[:8]}.docx", mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document")
+        
+    summary = st.session_state.session_log.get_session_summary(st.session_state.current_session_id)
+    if summary['accepted'] >= demo_config.get('refined_requirements_doc_min_stories', 5):
+        req_bytes = refined_requirements_report(st.session_state.current_session_id)
+        if req_bytes:
+            cols[3].download_button("📑 Refined Requirements", data=req_bytes, file_name=f"refined_requirements_{st.session_state.current_session_id[:8]}.docx", mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document")
+    else:
+        cols[3].button("📑 Refined Requirements", disabled=True, help="Accept at least 5 stories to generate this report.")
+    st.markdown('</div>', unsafe_allow_html=True)
