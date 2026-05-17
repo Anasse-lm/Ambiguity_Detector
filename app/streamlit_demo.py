@@ -258,7 +258,7 @@ def run_pipeline(story_text, is_regeneration=False, old_outputs=None):
         try:
             xai_results = {}
             for label in outputs['active_labels']:
-                attributions = explainer.explain_label(story_text, label)
+                attributions = explainer.explain_label(story_text, label, top_k=2)
                 xai_results[label] = {
                     "tokens": attributions['tokens'],
                     "scores": attributions['attributions'],
@@ -290,6 +290,7 @@ def run_pipeline(story_text, is_regeneration=False, old_outputs=None):
             evidence_tokens = [t for t in list(evidence_tokens) if t]
             allowed_placeholders = list(allowed_placeholders)
             outputs['bridge_selections'] = bridge_selections
+            print(f"[DEBUG] Bridge Selections Generated: {bridge_selections}", flush=True)
             outputs['bridge_evidence_tokens'] = evidence_tokens
             outputs['bridge_allowed_placeholders'] = allowed_placeholders
             st.session_state.session_log.log_event(st.session_state.current_session_id, "EXPLANATION_RENDERED", {"labels": outputs['active_labels']})
@@ -480,15 +481,9 @@ if st.session_state.current_story_text and st.session_state.current_pipeline_out
                     html_path = Path("outputs/refinement/temp_heatmap.html")
                     html_path.parent.mkdir(parents=True, exist_ok=True)
                     
-                    if prob >= 0.9:
-                        severity_color = "#B91C1C" # danger
-                    elif prob >= thresholds[label]:
-                        severity_color = "#D97706" # warning
-                    else:
-                        severity_color = "#2A8A3E" # pass
+                    severity_color = "#B91C1C" # danger (red)
                         
-                    evidence_words = [t[0] for t in exp.get('top_evidence_tokens', [])]
-                    render_html_heatmap(exp['tokens'], exp['scores'], html_path, positive_color=severity_color, evidence_words=evidence_words)
+                    render_html_heatmap(exp['tokens'], exp['scores'], html_path, positive_color=severity_color)
                     with open(html_path, 'r', encoding='utf-8') as f:
                         st.components.v1.html(f.read(), height=100)
                         

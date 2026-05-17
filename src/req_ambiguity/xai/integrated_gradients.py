@@ -99,7 +99,7 @@ class AmbiguityExplainer:
             self.tokenizer.pad_token, self.tokenizer.unk_token,
         }
         
-        stop_words = {"as", "a", "an", "i", "want", "to", "so", "that", "the", "in", "order", ",", ".", "!"}
+        stop_words = {"as", "a", "an", "i", "want", "to", "so", "that", "the", "in", "order", "of", "and", ",", ".", "!"}
         
         scored = []
         for tok, score in zip(tokens, attributions):
@@ -123,7 +123,7 @@ class AmbiguityExplainer:
             self.tokenizer.pad_token, self.tokenizer.unk_token,
         }
         
-        stop_words = {"as", "a", "an", "i", "want", "to", "so", "that", "the", "in", "order", ",", ".", "!"}
+        stop_words = {"as", "a", "an", "i", "want", "to", "so", "that", "the", "in", "order", "of", "and", ",", ".", "!"}
         
         scored = []
         for tok, score in zip(tokens, attributions):

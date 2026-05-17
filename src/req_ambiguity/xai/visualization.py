@@ -24,15 +24,32 @@ def _get_color(score: float, max_score: float, positive_color: str = "#fc8181") 
     rgba = cmap(mapped)
     return mcolors.to_hex(rgba)
 
-def render_html_heatmap(tokens: List[str], attributions: np.ndarray, out_path: Path, positive_color: str = "#fc8181", evidence_words: List[str] = None):
+def render_html_heatmap(tokens: List[str], attributions: np.ndarray, out_path: Path, positive_color: str = "#fc8181", top_k_only: int = None):
     out_path.parent.mkdir(parents=True, exist_ok=True)
     
     max_score = np.max(np.abs(attributions)) if len(attributions) > 0 else 1.0
     
-    # Optional filtering for specific evidence words
-    highlight_set = None
-    if evidence_words is not None:
-        highlight_set = {w.lower() for w in evidence_words}
+    # Pre-filter attributions to zero out stop words so they aren't considered for top_k
+    stop_words = {"as", "a", "an", "i", "want", "to", "so", "that", "the", "in", "order", "of", "and", ",", ".", "!"}
+    filtered_abs_scores = []
+    
+    for tok, score in zip(tokens, attributions):
+        clean_tok = tok.replace(" ", "").replace("_", "")
+        if clean_tok.lower() in stop_words or clean_tok in ["[CLS]", "[SEP]", "[PAD]", "<s>", "</s>", ",", ""]:
+            filtered_abs_scores.append(0.0)
+        else:
+            filtered_abs_scores.append(np.abs(score))
+            
+    filtered_abs_scores = np.array(filtered_abs_scores)
+    
+    # Optional filtering for top-k only
+    threshold = 0.0
+    if top_k_only is not None and top_k_only > 0 and len(filtered_abs_scores) > 0:
+        if len(filtered_abs_scores) > top_k_only:
+            threshold = np.sort(filtered_abs_scores)[-top_k_only]
+            if threshold == 0.0:
+                # If there are fewer than k non-zero words, don't set threshold to 0, use tiny value
+                threshold = 1e-9
     
     html = ["<div style='font-family: monospace; line-height: 2.0; padding: 10px; border: 1px solid #ccc; border-radius: 5px; background-color: #fff;'>"]
     for tok, score in zip(tokens, attributions):
@@ -47,12 +64,12 @@ def render_html_heatmap(tokens: List[str], attributions: np.ndarray, out_path: P
         if clean_tok in ["[CLS]", "[SEP]", "[PAD]", "<s>", "</s>", ",", ""]:
             continue
             
-        render_score = float(score)
-        if highlight_set is not None:
-            # If evidence words are provided, zero out the score if this token isn't in them
-            if clean_tok.lower() not in highlight_set:
-                render_score = 0.0
-                
+        # Zero out stop words
+        if clean_tok.lower() in stop_words:
+            render_score = 0.0
+        else:
+            render_score = float(score) if np.abs(score) >= threshold else 0.0
+            
         color = _get_color(render_score, float(max_score), positive_color=positive_color)
         
         # Add the space outside the span so the background color doesn't highlight the space

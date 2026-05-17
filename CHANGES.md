@@ -38,3 +38,13 @@ The session logging mechanism records every user interaction in a structured SQL
 - **CPU Latency**: Because the DeBERTa model runs on CPU natively on Mac, processing a story takes ~10-15 seconds.
 - **50-Story Cap**: To prevent API quota exhaustion and long processing delays, batches are capped at 50 stories.
 - **Single-LLM Backend**: Currently hardcoded to the Gemini flash model via API, with no open-source LLM fallback.
+
+# Phase 10: Prompt Architecture Refactor (v1.2)
+
+## Implementation Summary
+- Extracted the programmatic refinement prompt into a fixed, inspectable template at `configs/refinement_prompt_template.txt`.
+- `PromptBuilder` now loads this template at initialization and fills four runtime variable slots: `{ORIGINAL_STORY}`, `{ACTIVE_LABELS}`, `{EVIDENCE_TOKENS}`, and `{ALLOWED_PLACEHOLDERS}`.
+- The template includes three worked few-shot examples covering `SemanticAmbiguity`, `ActorAmbiguity`+`ScopeAmbiguity`, and `TechnicalAmbiguity`+`PriorityAmbiguity`.
+- Enforces six critical rules: no fact invention, restricted placeholder vocabulary, evidence-token grounding, structure preservation, IEEE 29148 quality criteria, and strictly formatted JSON output.
+- Incorporates domain conventions explicitly excluding common software engineering verbs and "shall" from being flagged as ambiguous.
+- Added `src/debug/test_prompt_assembly.py` utility for inspecting the assembled prompt without querying the LLM.
