@@ -1,25 +1,35 @@
-# Phase 6 & 7 Implementation Changes
+# Phase 9: Streamlit Interactive Demo App
 
 ## Implementation Summary
-- **Backend & Cache**: Implemented a pluggable `RefinementBackend` architecture. Built `GeminiBackend` using the `google.generativeai` SDK with exponential backoff retries. Built `CachedBackend` to wrap it with a SHA256-keyed JSON disk cache.
-- **Prompt Engineering**: Created `PromptBuilder` to assemble a strict 4-part prompt, forcing the LLM to only use placeholders from the provided `placeholders.yaml` list that correspond to the IG-extracted evidence tokens.
-- **Validation**: Implemented `RefinementValidator` with four strict checks: JSON parseability, schema correctness, placeholder legality, and self-consistency.
-- **Refinement Orchestration**: Built `Refiner` to handle extracting XAI evidence, executing the backend call, validating the response, and automatically injecting failure feedback to retry.
-- **Verification**: Built `Verifier` to strip `<TBD_*>` placeholders and recalculate the DeBERTa classification probabilities to compute a clean, non-artifacted ambiguity delta.
-- **Batch Execution**: Implemented `src/run_xai_refinement.py` to run the entire pipeline, track compliance, and generate publication-ready plots.
+The interactive Streamlit demonstration app brings together the DeBERTa ambiguity classifier, Captum XAI integrated gradients, and Gemini LLM refinement into a single web interface. 
 
-## Dry-Run Results
-*To be populated after running `python src/run_xai_refinement.py --dry-run`*
+It implements a unified batch review workflow across three input modes: Single Story, Multiple Stories (newline separated), and Document Upload (CSV, TXT, DOCX). It automatically handles model pre-warming to minimize CPU latency on the first request and enforces strict validation bounds (e.g., maximum 50 stories per batch) to ensure system stability.
 
-## Full-Run Results
-*To be populated after full execution*
+## Infrastructure for Future User Studies
+The session logging mechanism records every user interaction in a structured SQLite log including input mode, batch progression, accept/regenerate/skip decisions, and timing. **This thesis does not conduct a formal user study** because recruiting practicing requirements engineers was not feasible within the thesis scope. The log infrastructure exists as future-work scaffolding: a future researcher could attach a user study protocol to the existing logging interface without modifying the demo. Aggregate session statistics derived from the log are reported in the thesis Discussion chapter as descriptive evidence about system usage, not as evaluative claims about user preferences.
 
-## Falsifiable Criteria Status
-*To be updated after execution*
-- [ ] First-attempt placeholder compliance >= 85%
-- [ ] Mean aggregate delta < 0
-- [ ] Percentage of stories improved >= 70%
-- [ ] No more than 5% of stories fail all retries
+## How to Launch
+1. Open your terminal in the `Solution` directory.
+2. (Optional but recommended) Export your API key:
+   `export GEMINI_API_KEY="your-api-key"`
+3. Install dependencies:
+   `pip install -r requirements.txt`
+4. Run the app:
+   `streamlit run app/streamlit_demo.py`
 
-## Runtime
-*To be populated after execution*
+## Defense-Day Checklist
+- [ ] Ensure `GEMINI_API_KEY` is active.
+- [ ] Run `streamlit run app/streamlit_demo.py` beforehand to allow the model to pre-warm on the CPU.
+- [ ] Load the Single Story mode and use the pre-loaded examples.
+- [ ] Prepare a small 5-10 row CSV file if demonstrating the Document Upload feature.
+- [ ] Familiarize yourself with the "New Session" button to clear state between examiner questions.
+
+## Sample Document Formats
+- **CSV**: Ensure there is a column named `StoryText`, `story`, or `text`.
+- **TXT**: Separate stories with a blank line (double newline).
+- **DOCX**: Each paragraph is parsed as a single story.
+
+## Known Limitations
+- **CPU Latency**: Because the DeBERTa model runs on CPU natively on Mac, processing a story takes ~10-15 seconds.
+- **50-Story Cap**: To prevent API quota exhaustion and long processing delays, batches are capped at 50 stories.
+- **Single-LLM Backend**: Currently hardcoded to the Gemini flash model via API, with no open-source LLM fallback.

@@ -1,0 +1,8 @@
+max_stories_per_batch: 50
+max_story_length_chars: 2000
+min_story_length_chars: 10
+max_regenerations_per_story: 3
+pre_warming_dummy_text: "As a user, I want to update records."
+example_stories_count: 4
+refined_requirements_doc_min_stories: 5
+cpu_latency_warning_seconds: 5
