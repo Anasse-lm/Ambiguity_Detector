@@ -139,7 +139,7 @@ def get_refiner():
         retry_delay_seconds=ref_config.get('retry_delay_seconds', 2.0)
     )
     backend = CachedBackend(gemini_backend, ref_config['cache_dir'], ref_config.get('cache_enabled', True))
-    prompt_builder = PromptBuilder('configs/placeholders.yaml', ref_config['few_shot_examples_path'])
+    prompt_builder = PromptBuilder()
     validator = RefinementValidator('configs/placeholders.yaml')
     return Refiner(backend, prompt_builder, validator, ref_config)
 

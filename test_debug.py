@@ -1,50 +1,47 @@
 import sys
 import os
+import json
 from pathlib import Path
 
-# Add project root and src to sys.path
-sys.path.append(str(Path(__file__).parent))
 sys.path.append(str(Path(__file__).parent / "src"))
 
-import streamlit as st
+from req_ambiguity.refinement.refiner import Refiner
+from req_ambiguity.refinement.prompt_builder import PromptBuilder
+from req_ambiguity.refinement.backends.gemini import GeminiBackend
+from req_ambiguity.refinement.validator import RefinementValidator
 
-class MockSessionState(dict):
-    def __getattr__(self, key):
-        if key in self:
-            return self[key]
-        return None
-    def __setattr__(self, key, value):
-        self[key] = value
-
-st.session_state = MockSessionState()
-st.session_state.current_session_id = "test"
-st.session_state.api_key = "dummy"
-
-class MockLogger:
-    def log_event(self, *args, **kwargs): pass
-st.session_state.session_log = MockLogger()
-
-from app.streamlit_demo import run_pipeline
-
-story = "As a user, I want to update records so that I can process the system quickly."
-print("Running pipeline...")
-try:
-    outputs = run_pipeline(story)
-    print("Pipeline finished successfully.")
+def main():
+    api_key = os.environ.get("GEMINI_API_KEY")
+    if not api_key:
+        print("Set GEMINI_API_KEY")
+        return
+        
+    builder = PromptBuilder()
+    backend = GeminiBackend(max_retries=1, retry_delay_seconds=1.0)
+    validator = RefinementValidator('configs/placeholders.yaml')
     
-    print("\n--- ACTIVE LABELS ---")
-    print(outputs.get('active_labels', []))
+    refiner = Refiner(
+        prompt_builder=builder,
+        backend=backend,
+        validator=validator,
+        config={"max_retries": 1}
+    )
     
-    print("\n--- XAI RESULTS ---")
-    if 'xai' in outputs:
-        for label, exp in outputs['xai'].items():
-            print(f"Label: {label}")
-            print(f"Top Evidence Tokens: {exp.get('top_evidence_tokens', [])}")
-            
-    print("\n--- BRIDGE SELECTIONS ---")
-    bridge_sel = outputs.get('bridge_selections', [])
-    print(bridge_sel)
+    xai_record_path = Path(__file__).parent / "outputs" / "xai" / "json" / "US-C1-005.json"
+    with open(xai_record_path, 'r') as f:
+        xai_record = json.load(f)
+        
+    print("Testing refiner...")
+    outcome = refiner.refine("US-C1-005", xai_record)
     
-except Exception as e:
-    import traceback
-    traceback.print_exc()
+    print("\n--- OUTCOME ---")
+    print(f"Passed: {outcome.passed}")
+    print(f"Parsed JSON: {outcome.parsed_json}")
+    print(f"Raw Response: {outcome.raw_response}")
+    
+    if not outcome.passed:
+        for log in outcome.attempt_logs:
+            print("\nAttempt Error:", log.get('validation_error'))
+
+if __name__ == "__main__":
+    main()
