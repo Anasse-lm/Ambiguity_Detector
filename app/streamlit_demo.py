@@ -195,6 +195,18 @@ with st.sidebar:
         if not st.session_state.api_key:
             st.warning("Enter your Gemini API key to enable refinement.")
             
+    st.subheader("Model Sensitivity")
+    global_threshold = st.slider(
+        "Ambiguity Detection Threshold",
+        min_value=0.0,
+        max_value=1.0,
+        value=0.50,
+        step=0.05,
+        help="Adjust the classifier's sensitivity. Lower values flag more potential ambiguities."
+    )
+    for key in list(thresholds.keys()):
+        thresholds[key] = global_threshold
+        
     st.divider()
     if st.button("New Session", use_container_width=True):
         start_new_session(st.session_state.current_input_mode)
@@ -491,7 +503,7 @@ if st.session_state.current_story_text and st.session_state.current_pipeline_out
             html_chips.append(f"""
             <div class="label-chip {chip_class}">
                 <div>{icon} {display_label}</div>
-                <div class="prob">{prob:.2f} (Threshold: {thresholds[label]:.2f})</div>
+                <div class="prob">{prob * 100:.1f}% (Threshold: {thresholds[label] * 100:.0f}%)</div>
             </div>
             """)
             
@@ -503,7 +515,7 @@ if st.session_state.current_story_text and st.session_state.current_pipeline_out
         if 'xai' in outputs:
             for label in outputs['active_labels']:
                 prob = outputs['detection'][label]
-                st.markdown(f"**{label} ({prob:.2f})**")
+                st.markdown(f"**{label.replace('Ambiguity', '')} ({prob * 100:.1f}%)**")
                 st.caption("Tokens contributing to this prediction")
                 exp = outputs['xai'].get(label)
                 if exp:
@@ -724,13 +736,13 @@ if st.session_state.current_story_text and st.session_state.current_pipeline_out
             v_data = st.session_state.followup_verification
             st.markdown('<div class="custom-card"><h3>Ambiguity Reduction</h3>', unsafe_allow_html=True)
             df_ver = pd.DataFrame({
-                "Before": v_data['probs_before'],
-                "After": v_data['probs_after']
+                "Before (%)": [p * 100 for p in v_data['probs_before']],
+                "After (%)": [p * 100 for p in v_data['probs_after']]
             }, index=[l.replace('Ambiguity', '') for l in label_cols])
             st.bar_chart(df_ver)
             
-            delta = v_data['aggregate_delta']
-            st.write(f"Aggregate change: **{delta:.4f}** (negative = reduced)")
+            delta = v_data['aggregate_delta'] * 100
+            st.write(f"Aggregate change: **{delta:.2f}%** (negative = reduced)")
             if v_data['improved']:
                 st.markdown("<div style='color: var(--success); font-weight: bold;'>✓ Refinement reduced ambiguity</div>", unsafe_allow_html=True)
             else:
