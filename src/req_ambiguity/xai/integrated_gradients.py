@@ -99,12 +99,43 @@ class AmbiguityExplainer:
             self.tokenizer.pad_token, self.tokenizer.unk_token,
         }
         
+        stop_words = {"as", "a", "an", "i", "want", "to", "so", "that", "the", "in", "order", ",", ".", "!"}
+        
         scored = []
         for tok, score in zip(tokens, attributions):
             if tok not in special_tokens:
                 clean_tok = tok.replace(" ", "")
-                if clean_tok:
+                if clean_tok and clean_tok.lower() not in stop_words:
                     scored.append((clean_tok, float(score)))
                     
         scored.sort(key=lambda x: abs(x[1]), reverse=True)
         return scored[:top_k]
+
+    def explain_label(self, text: str, target_label: str, top_k: int = 5, story_id: str = None) -> Dict[str, Any]:
+        """
+        Generates attributions and top evidence tokens for a specific label in one pass.
+        Returns a dictionary expected by the Streamlit application.
+        """
+        tokens, attributions = self.explain(text, target_label, story_id=story_id)
+        
+        special_tokens = {
+            self.tokenizer.cls_token, self.tokenizer.sep_token,
+            self.tokenizer.pad_token, self.tokenizer.unk_token,
+        }
+        
+        stop_words = {"as", "a", "an", "i", "want", "to", "so", "that", "the", "in", "order", ",", ".", "!"}
+        
+        scored = []
+        for tok, score in zip(tokens, attributions):
+            if tok not in special_tokens:
+                clean_tok = tok.replace(" ", "")
+                if clean_tok and clean_tok.lower() not in stop_words:
+                    scored.append((clean_tok, float(score)))
+                    
+        scored.sort(key=lambda x: abs(x[1]), reverse=True)
+        
+        return {
+            "tokens": tokens,
+            "attributions": attributions.tolist(),
+            "top_evidence_tokens": scored[:top_k]
+        }

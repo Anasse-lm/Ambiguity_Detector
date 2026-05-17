@@ -18,17 +18,25 @@ class PlaceholderBridge:
         Returns a list of dicts: placeholder, match_score, matched_evidence, via_fallback.
         """
         results = []
-        if label not in self.trigger_map:
+        if label not in self.placeholders:
             return results
 
-        rules = self.trigger_map[label]
+        placeholder_defs = self.placeholders[label]
         extracted_tokens = [tok.lower() for tok, score in evidence_tokens]
         
         matched_any = False
-        for rule in rules:
-            triggers = rule.get("triggers", [])
-            placeholder = rule["placeholder"]
+        for pdef in placeholder_defs:
+            placeholder_name = pdef["name"]
             
+            triggers = []
+            if placeholder_name in self.trigger_map:
+                trigger_items = self.trigger_map[placeholder_name].get("triggers", [])
+                for t in trigger_items:
+                    if isinstance(t, dict) and "word" in t:
+                        triggers.append(t["word"].lower())
+                    elif isinstance(t, str):
+                        triggers.append(t.lower())
+                        
             # Simple substring/token matching
             matched_evidence = []
             for tok in extracted_tokens:
@@ -39,16 +47,16 @@ class PlaceholderBridge:
             if matched_evidence:
                 matched_any = True
                 results.append({
-                    "placeholder": placeholder,
-                    "match_score": 1.0, # Could be weighted by attribution score
+                    "placeholder": placeholder_name,
+                    "match_score": 1.0,
                     "matched_evidence": list(set(matched_evidence)),
                     "via_fallback": False
                 })
                 
         # If no triggers match, fallback to the first placeholder defined for that label
-        if not matched_any and rules:
+        if not matched_any and placeholder_defs:
             results.append({
-                "placeholder": rules[0]["placeholder"],
+                "placeholder": placeholder_defs[0]["name"],
                 "match_score": 0.0,
                 "matched_evidence": [],
                 "via_fallback": True

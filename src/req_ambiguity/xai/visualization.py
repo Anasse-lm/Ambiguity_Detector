@@ -4,38 +4,59 @@ import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors
 import numpy as np
 
-# A pale red for positive (pushing up), pale blue for negative (pushing down)
-ATTRIBUTION_CMAP = mcolors.LinearSegmentedColormap.from_list(
-    "attribution_cmap", ["#e8f4f8", "#ffffff", "#fce8e6"]
+# Default saturated red for positive (pushing up), saturated blue for negative (pushing down)
+DEFAULT_CMAP = mcolors.LinearSegmentedColormap.from_list(
+    "attribution_cmap", ["#63b3ed", "#ffffff", "#fc8181"]
 )
 
-def _get_color(score: float, max_score: float) -> str:
+def _get_color(score: float, max_score: float, positive_color: str = "#fc8181") -> str:
     if max_score == 0:
         norm_score = 0
     else:
         norm_score = max(min(score / max_score, 1.0), -1.0)
+        
+    cmap = mcolors.LinearSegmentedColormap.from_list(
+        "dynamic_cmap", ["#63b3ed", "#ffffff", positive_color]
+    )
     
     # Map to [0, 1] for the colormap
     mapped = (norm_score + 1) / 2
-    rgba = ATTRIBUTION_CMAP(mapped)
+    rgba = cmap(mapped)
     return mcolors.to_hex(rgba)
 
-def render_html_heatmap(tokens: List[str], attributions: np.ndarray, out_path: Path):
+def render_html_heatmap(tokens: List[str], attributions: np.ndarray, out_path: Path, positive_color: str = "#fc8181", evidence_words: List[str] = None):
     out_path.parent.mkdir(parents=True, exist_ok=True)
     
     max_score = np.max(np.abs(attributions)) if len(attributions) > 0 else 1.0
     
+    # Optional filtering for specific evidence words
+    highlight_set = None
+    if evidence_words is not None:
+        highlight_set = {w.lower() for w in evidence_words}
+    
     html = ["<div style='font-family: monospace; line-height: 2.0; padding: 10px; border: 1px solid #ccc; border-radius: 5px; background-color: #fff;'>"]
     for tok, score in zip(tokens, attributions):
-        clean_tok = tok.replace(" ", " ") if " " in tok else tok
+        # Handle DeBERTa word-start marker (U+2581) which looks like an underscore
+        prefix_space = " " if " " in tok else ""
+        clean_tok = tok.replace(" ", "").replace("_", "")
+        
+        # Escape HTML
         clean_tok = clean_tok.replace("<", "&lt;").replace(">", "&gt;")
         
-        # skip special tokens for clean display
-        if clean_tok in ["[CLS]", "[SEP]", "[PAD]", "<s>", "</s>"]:
+        # Skip special tokens and requested punctuation
+        if clean_tok in ["[CLS]", "[SEP]", "[PAD]", "<s>", "</s>", ",", ""]:
             continue
             
-        color = _get_color(float(score), float(max_score))
-        html.append(f"<span style='background-color: {color}; padding: 2px 4px; margin: 0 1px; border-radius: 3px; color: #000;' title='score: {score:.4f}'>{clean_tok}</span>")
+        render_score = float(score)
+        if highlight_set is not None:
+            # If evidence words are provided, zero out the score if this token isn't in them
+            if clean_tok.lower() not in highlight_set:
+                render_score = 0.0
+                
+        color = _get_color(render_score, float(max_score), positive_color=positive_color)
+        
+        # Add the space outside the span so the background color doesn't highlight the space
+        html.append(f"{prefix_space}<span style='background-color: {color}; padding: 2px 4px; margin: 0 1px; border-radius: 3px; color: #000;' title='score: {score:.4f}'>{clean_tok}</span>")
         
     html.append("</div>")
     

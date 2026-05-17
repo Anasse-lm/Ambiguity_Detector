@@ -18,7 +18,16 @@ sys.path.append(str(Path(__file__).parent.parent / "src"))
 from req_ambiguity.modeling.classifier import DeBERTaAmbiguityClassifier
 from transformers import AutoTokenizer
 from req_ambiguity.xai.integrated_gradients import AmbiguityExplainer
+import importlib
+import sys
+if 'req_ambiguity.xai.integrated_gradients' in sys.modules:
+    importlib.reload(sys.modules['req_ambiguity.xai.integrated_gradients'])
+if 'req_ambiguity.xai.visualization' in sys.modules:
+    importlib.reload(sys.modules['req_ambiguity.xai.visualization'])
+from req_ambiguity.xai.integrated_gradients import AmbiguityExplainer
+
 from req_ambiguity.xai.bridge import PlaceholderBridge
+from req_ambiguity.refinement.backends.base import RefinementRequest
 from req_ambiguity.refinement.backends.gemini import GeminiBackend
 from req_ambiguity.refinement.cache import CachedBackend
 from req_ambiguity.refinement.prompt_builder import PromptBuilder
@@ -83,13 +92,15 @@ init_state()
 # Task 5: Model loading with pre-warming
 @st.cache_resource
 def load_classifier_and_tokenizer():
+    # Cache busted for MPS
     train_config = load_config('configs/train.yaml')
     label_cols = train_config['label_cols']
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    device = torch.device('cuda' if torch.cuda.is_available() else 'mps' if torch.backends.mps.is_available() else 'cpu')
     model_name = train_config['model_name']
     tokenizer = AutoTokenizer.from_pretrained(model_name)
     model = DeBERTaAmbiguityClassifier(model_name, len(label_cols))
     model.load_state_dict(torch.load('outputs/checkpoints/best_model.pt', map_location=device))
+    model = model.to(device)
     model.eval()
     
     with open('outputs/results/optimal_thresholds.json', 'r') as f:
@@ -97,7 +108,8 @@ def load_classifier_and_tokenizer():
         
     # Pre-warm
     dummy = demo_config.get('pre_warming_dummy_text', "As a user, I want to update records.")
-    inputs = tokenizer(dummy, return_tensors='pt', padding=True, truncation=True, max_length=128).to(device)
+    inputs = tokenizer(dummy, return_tensors='pt', padding=True, truncation=True, max_length=128)
+    inputs = {k: v.to(device) for k, v in inputs.items()}
     with torch.no_grad():
         model(input_ids=inputs['input_ids'], attention_mask=inputs['attention_mask'])
         
@@ -105,12 +117,14 @@ def load_classifier_and_tokenizer():
 
 @st.cache_resource
 def load_xai_explainer():
+    # Cache busted v4
     model, tokenizer, _, label_cols, device = load_classifier_and_tokenizer()
     return AmbiguityExplainer(model, tokenizer, device, label_cols)
 
 @st.cache_resource
 def load_placeholder_bridge():
-    return PlaceholderBridge('configs/placeholders.yaml', 'configs/trigger_map.yaml')
+    # Cache busted v4
+    return PlaceholderBridge('configs/trigger_map.yaml', 'configs/placeholders.yaml')
 
 # Load models
 model, tokenizer, thresholds, label_cols, device = load_classifier_and_tokenizer()
@@ -216,7 +230,8 @@ def run_pipeline(story_text, is_regeneration=False, old_outputs=None):
     # 1. Classification
     if not is_regeneration:
         try:
-            inputs = tokenizer(story_text, return_tensors='pt', padding=True, truncation=True, max_length=128).to(device)
+            inputs = tokenizer(story_text, return_tensors='pt', padding=True, truncation=True, max_length=128)
+            inputs = {k: v.to(device) for k, v in inputs.items()}
             with torch.no_grad():
                 logits = model(input_ids=inputs['input_ids'], attention_mask=inputs['attention_mask'])
             probs = torch.sigmoid(logits).cpu().numpy()[0]
@@ -250,6 +265,33 @@ def run_pipeline(story_text, is_regeneration=False, old_outputs=None):
                     "top_evidence_tokens": attributions['top_evidence_tokens']
                 }
             outputs['xai'] = xai_results
+            
+            # Bridge
+            bridge_selections = []
+            evidence_tokens = set()
+            allowed_placeholders = set()
+            
+            for label in outputs['active_labels']:
+                exp = outputs.get('xai', {}).get(label, {})
+                evidence = exp.get('top_evidence_tokens', [])
+                for t in evidence:
+                    evidence_tokens.add(t[0].replace(' ', '').strip())
+                    
+                matched_list = bridge.match_evidence(label, evidence)
+                for matched in matched_list:
+                    p = matched['placeholder']
+                    allowed_placeholders.add(p)
+                    bridge_selections.append({
+                        "label": label,
+                        "placeholder": p,
+                        "trigger": ", ".join(matched['matched_evidence']) if matched['matched_evidence'] else "fallback"
+                    })
+                    
+            evidence_tokens = [t for t in list(evidence_tokens) if t]
+            allowed_placeholders = list(allowed_placeholders)
+            outputs['bridge_selections'] = bridge_selections
+            outputs['bridge_evidence_tokens'] = evidence_tokens
+            outputs['bridge_allowed_placeholders'] = allowed_placeholders
             st.session_state.session_log.log_event(st.session_state.current_session_id, "EXPLANATION_RENDERED", {"labels": outputs['active_labels']})
         except Exception as e:
             st.session_state.session_log.log_event(st.session_state.current_session_id, "ERROR", {"stage": "xai", "error": str(e)})
@@ -266,35 +308,29 @@ def run_pipeline(story_text, is_regeneration=False, old_outputs=None):
             
             refiner = get_refiner()
             
-            # Bridge
-            bridge_selections = []
-            for label in outputs['active_labels']:
-                exp = outputs.get('xai', {}).get(label, {})
-                top_tokens = [t[0] for t in exp.get('top_evidence_tokens', [])]
-                matched = bridge.match_trigger(label, top_tokens)
-                if matched:
-                    bridge_selections.append({
-                        "label": label,
-                        "placeholder": matched['placeholder'],
-                        "trigger": matched['trigger']
-                    })
-                    
-            xai_record = {
-                "original_text": story_text,
-                "predicted_labels": outputs['active_labels'],
-                "label_explanations": outputs.get('xai', {}),
-                "bridge_selections": bridge_selections
-            }
+            prompt = refiner.prompt_builder.build_prompt(
+                original_story=story_text,
+                active_labels=outputs['active_labels'],
+                evidence_tokens=outputs.get('bridge_evidence_tokens', []),
+                allowed_placeholders=outputs.get('bridge_allowed_placeholders', [])
+            )
             
-            prompt = refiner.prompt_builder.build_prompt(xai_record)
             if is_regeneration:
                 prompt += "\n\nThe previous refinement was rejected. Please propose an alternative refinement using the same placeholder vocabulary but with different word choices or phrasing."
                 
-            response_text = refiner.backend.call(prompt)
-            validated = refiner.validator.validate(response_text)
+            request = RefinementRequest(
+                prompt_text=prompt,
+                model_name=refiner.config.get('model_name', 'gemini-1.5-pro'),
+                temperature=refiner.config.get('temperature', 0.2),
+                max_output_tokens=refiner.config.get('max_output_tokens', 1024),
+                top_p=refiner.config.get('top_p', 0.9)
+            )
             
-            if validated:
-                outputs['refinement'] = validated
+            response = refiner.backend.call(request)
+            validated = refiner.validator.validate(response.text)
+            
+            if validated.passed:
+                outputs['refinement'] = validated.parsed_json
                 st.session_state.session_log.log_event(st.session_state.current_session_id, "REFINEMENT_GENERATED", {"status": "success", "is_regeneration": is_regeneration})
             else:
                 outputs['refinement'] = {"error": "Failed validation rules."}
@@ -342,7 +378,7 @@ if input_mode == "Single story":
         st.warning("Could not load examples from test.csv")
 
     current_val = st.session_state.get('quick_fill', "")
-    story_input = st.text_area("User Story", value=current_val, height=100)
+    story_input = st.text_area("User Story", value=current_val, height=100, placeholder="e.g. As a user, I want to update records...")
     
     if st.button("🔍 Analyze and Refine", type="primary"):
         st.session_state.story_queue = [{"id": str(uuid.uuid4()), "text": story_input.strip()}]
@@ -395,7 +431,8 @@ if trigger_batch and st.session_state.story_queue:
     st.session_state.current_story_id = first_item['id']
     st.session_state.current_story_text = first_item['text']
     st.session_state.regeneration_count_for_current_story = 0
-    with st.spinner("Processing your story — this takes a few seconds on CPU."):
+    hardware_name = "Apple Silicon GPU (MPS)" if device.type == 'mps' else "NVIDIA GPU" if device.type == 'cuda' else "CPU"
+    with st.spinner(f"Processing your story — running hardware acceleration on {hardware_name}."):
         outputs = run_pipeline(first_item['text'])
         st.session_state.current_pipeline_outputs = outputs
         st.session_state.session_log.log_story(st.session_state.current_session_id, first_item['id'], first_item['text'], outputs, st.session_state.current_batch_id, 0)
@@ -435,15 +472,33 @@ if st.session_state.current_story_text and st.session_state.current_pipeline_out
         st.markdown('<div class="custom-card"><h3>Explanation (Integrated Gradients)</h3>', unsafe_allow_html=True)
         if 'xai' in outputs:
             for label in outputs['active_labels']:
-                st.markdown(f"**{label} ({outputs['detection'][label]:.2f})**")
+                prob = outputs['detection'][label]
+                st.markdown(f"**{label} ({prob:.2f})**")
                 st.caption("Tokens contributing to this prediction")
                 exp = outputs['xai'].get(label)
                 if exp:
                     html_path = Path("outputs/refinement/temp_heatmap.html")
                     html_path.parent.mkdir(parents=True, exist_ok=True)
-                    render_html_heatmap(exp['tokens'], exp['scores'], html_path)
+                    
+                    if prob >= 0.9:
+                        severity_color = "#B91C1C" # danger
+                    elif prob >= thresholds[label]:
+                        severity_color = "#D97706" # warning
+                    else:
+                        severity_color = "#2A8A3E" # pass
+                        
+                    evidence_words = [t[0] for t in exp.get('top_evidence_tokens', [])]
+                    render_html_heatmap(exp['tokens'], exp['scores'], html_path, positive_color=severity_color, evidence_words=evidence_words)
                     with open(html_path, 'r', encoding='utf-8') as f:
                         st.components.v1.html(f.read(), height=100)
+                        
+                    # Show Placeholders from Bridge
+                    label_placeholders = [bs['placeholder'] for bs in outputs.get('bridge_selections', []) if bs['label'] == label]
+                    if label_placeholders:
+                        st.markdown("**Mapped Placeholders:**")
+                        chips = " ".join([f"<span class='label-chip pass' style='font-family: monospace; padding: 2px 6px;'>{p}</span>" for p in set(label_placeholders)])
+                        st.markdown(chips, unsafe_allow_html=True)
+                        st.markdown("<br>", unsafe_allow_html=True)
         st.markdown('</div>', unsafe_allow_html=True)
                         
         st.markdown('<div class="custom-card"><h3>Refined Story</h3>', unsafe_allow_html=True)
