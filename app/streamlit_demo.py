@@ -8,6 +8,7 @@ from pathlib import Path
 import streamlit as st
 import torch
 import pandas as pd
+import random
 import yaml
 import matplotlib.pyplot as plt
 
@@ -43,6 +44,12 @@ def load_config(path):
 
 # Initialization
 st.set_page_config(page_title="Ambiguity Detection Pipeline", layout="wide")
+
+# Load CSS
+css_path = Path(__file__).parent / "static" / "styles.css"
+if css_path.exists():
+    with open(css_path, "r", encoding="utf-8") as f:
+        st.markdown(f"<style>{f.read()}</style>", unsafe_allow_html=True)
 
 if 'session_log' not in st.session_state:
     st.session_state.session_log = SessionLog()
@@ -143,8 +150,13 @@ if not st.session_state.session_active:
     start_new_session(st.session_state.current_input_mode)
 
 # TASK 6: HEADER & UI SCALFFOLDING
-st.title("AI-Based Ambiguity Detection and Refinement Pipeline")
-st.subheader("Master Thesis Demonstration")
+st.markdown("""
+<div class="branded-header">
+    <h1>Ambiguity Detection and Refinement Pipeline</h1>
+    <p>Master Thesis Demonstration</p>
+    <span class="version">v1.0 — Built 2026</span>
+</div>
+""", unsafe_allow_html=True)
 
 # SIDEBAR
 with st.sidebar:
@@ -160,28 +172,14 @@ with st.sidebar:
         if not st.session_state.api_key:
             st.warning("Enter your Gemini API key to enable refinement.")
             
-    st.text(f"Model Checkpoint: outputs/checkpoints/best_model.pt")
-    st.text(f"Trigger Map Version: v1.2")
-    
-    st.header("Input Mode")
-    input_mode = st.radio("Select Input Mode", ["Single story", "Multiple stories", "Upload document"], index=["Single story", "Multiple stories", "Upload document"].index(st.session_state.current_input_mode))
-    
-    if input_mode != st.session_state.current_input_mode:
-        start_new_session(input_mode)
-        
-    example_selected = None
-    if input_mode == "Single story":
-        st.header("Example Stories")
-        examples = [
-            "",
-            "As a doctor, I would like to update system to save time so that I can ensure quality.",
-            "As a user, I want to access records in order to reduce errors.",
-            "As a caregiver, I want to update patient info with fast performance as soon as possible.",
-            "As a bank customer, I need to download statements continually so that I can manage finances."
-        ]
-        example_selected = st.selectbox("Choose an example to load", examples)
+    st.divider()
+    if st.button("New Session", use_container_width=True):
+        start_new_session(st.session_state.current_input_mode)
+        st.success("New session started")
+        st.rerun()
 
-    if input_mode in ["Multiple stories", "Upload document"] and st.session_state.current_batch_id:
+    # Batch Progress
+    if st.session_state.current_input_mode in ["Multiple stories", "Upload document"] and st.session_state.current_batch_id:
         st.header("Batch Progress")
         batch_prog = st.session_state.session_log.get_batch_progress(st.session_state.current_batch_id)
         if batch_prog:
@@ -189,35 +187,23 @@ with st.sidebar:
             reviewed = batch_prog['stories_reviewed']
             st.progress(reviewed / max(total, 1))
             st.text(f"Currently reviewing: story {st.session_state.current_queue_position + 1} of {total}")
-            
-    st.header("Session")
-    st.text(f"Session ID: {st.session_state.current_session_id[:8]}")
-    summary_placeholder = st.empty()
-    
-    if st.button("New Session"):
-        start_new_session(input_mode)
-        st.success("New session started")
-        st.rerun()
-        
-    st.header("Reports")
-    if st.session_state.current_story_id:
-        report_bytes = per_story_report(st.session_state.current_session_id, st.session_state.current_story_id)
-        if report_bytes:
-            st.download_button("Download Per-story Report", data=report_bytes, file_name=f"report_{st.session_state.current_story_id}.docx", mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document")
-            
-    sum_bytes = session_summary_report(st.session_state.current_session_id)
-    if sum_bytes:
-        st.download_button("Download Session Summary", data=sum_bytes, file_name=f"session_summary_{st.session_state.current_session_id[:8]}.docx", mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document")
-        
-    cq_bytes = clarification_questions_report(st.session_state.current_session_id)
-    if cq_bytes:
-        st.download_button("Download Clarification Questions", data=cq_bytes, file_name=f"clarification_questions_{st.session_state.current_session_id[:8]}.docx", mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document")
-        
-    summary = st.session_state.session_log.get_session_summary(st.session_state.current_session_id)
-    if summary['accepted'] >= demo_config.get('refined_requirements_doc_min_stories', 5):
-        req_bytes = refined_requirements_report(st.session_state.current_session_id)
-        if req_bytes:
-            st.download_button("Download Refined Requirements", data=req_bytes, file_name=f"refined_requirements_{st.session_state.current_session_id[:8]}.docx", mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document")
+
+# MAIN DASHBOARD METRICS
+summary = st.session_state.session_log.get_session_summary(st.session_state.current_session_id)
+st.markdown('<div class="metric-container">', unsafe_allow_html=True)
+col1, col2, col3, col4 = st.columns(4)
+col1.metric("Session ID", st.session_state.current_session_id[:8])
+col2.metric("Stories Processed", summary.get('total_stories', 0))
+col3.metric("Refinements Accepted", summary.get('accepted', 0))
+col4.metric("Stories Skipped", summary.get('skipped', 0))
+st.markdown('</div>', unsafe_allow_html=True)
+
+# INPUT SECTION
+st.markdown('<div class="custom-card"><h3>Input Phase</h3>', unsafe_allow_html=True)
+input_mode = st.radio("Select Input Mode", ["Single story", "Multiple stories", "Upload document"], index=["Single story", "Multiple stories", "Upload document"].index(st.session_state.current_input_mode), horizontal=True)
+
+if input_mode != st.session_state.current_input_mode:
+    start_new_session(input_mode)
 
 # Function to run pipeline
 def run_pipeline(story_text, is_regeneration=False, old_outputs=None):
@@ -331,22 +317,41 @@ def run_pipeline(story_text, is_regeneration=False, old_outputs=None):
             st.session_state.session_log.log_event(st.session_state.current_session_id, "ERROR", {"stage": "verification", "error": str(e)})
             st.error("Could not compute before/after verification.")
             
-    return outputs
-
-# Input Area
+    return outputs# Input Area
 validation_warnings = []
 trigger_batch = False
 
 if input_mode == "Single story":
-    story_input = st.text_area("User Story", value=example_selected if example_selected else "", height=100)
-    if st.button("Analyze and Refine"):
+    st.markdown("**Try a quick-fill example:**")
+    try:
+        df = pd.read_csv("data/processed/test.csv")
+        # Get processed stories to avoid showing them again
+        session_data = st.session_state.session_log.get_session_data(st.session_state.current_session_id)
+        used_stories = [s['original_text'] for s in session_data['stories']]
+        available_df = df[~df['StoryText'].isin(used_stories)]
+        if len(available_df) >= 4:
+            sampled = available_df.sample(4)['StoryText'].tolist()
+        else:
+            sampled = df.sample(min(4, len(df)))['StoryText'].tolist()
+            
+        cols = st.columns(4)
+        for i, example_text in enumerate(sampled):
+            if cols[i].button(example_text[:50] + "...", key=f"ex_{i}", help=example_text):
+                st.session_state['quick_fill'] = example_text
+    except Exception as e:
+        st.warning("Could not load examples from test.csv")
+
+    current_val = st.session_state.get('quick_fill', "")
+    story_input = st.text_area("User Story", value=current_val, height=100)
+    
+    if st.button("🔍 Analyze and Refine", type="primary"):
         st.session_state.story_queue = [{"id": str(uuid.uuid4()), "text": story_input.strip()}]
         st.session_state.current_queue_position = 0
         trigger_batch = True
         
 elif input_mode == "Multiple stories":
     stories_input = st.text_area("Paste multiple stories here, separated by blank lines. Maximum 50 stories per batch.", height=250)
-    if st.button("Start Batch"):
+    if st.button("🔍 Start Batch", type="primary"):
         stories = parse_multiple_stories(stories_input)
         valid_stories, validation_warnings = validate_stories(stories, demo_config['max_stories_per_batch'], demo_config['min_story_length_chars'], demo_config['max_story_length_chars'])
         st.session_state.story_queue = [{"id": str(uuid.uuid4()), "text": s} for s in valid_stories]
@@ -355,21 +360,28 @@ elif input_mode == "Multiple stories":
         
 elif input_mode == "Upload document":
     uploaded_file = st.file_uploader("Upload CSV, TXT, or DOCX", type=["csv", "txt", "docx"])
-    st.markdown("CSV: one story per row in a column named 'StoryText', 'story', or 'text'.\nTXT: one story per blank-line-separated block.\nDOCX: one story per paragraph.\nMaximum 50 stories per batch.")
-    if st.button("Start Batch") and uploaded_file:
-        file_bytes = uploaded_file.read()
-        stories = []
-        if uploaded_file.name.endswith(".csv"):
-            stories = parse_csv_upload(file_bytes)
-        elif uploaded_file.name.endswith(".txt"):
-            stories = parse_txt_upload(file_bytes)
-        elif uploaded_file.name.endswith(".docx"):
-            stories = parse_docx_upload(file_bytes)
+    with st.expander("Format Help"):
+        st.markdown("CSV: one story per row in a column named 'StoryText', 'story', or 'text'.\nTXT: one story per blank-line-separated block.\nDOCX: one story per paragraph.\nMaximum 50 stories per batch.")
+    if st.button("🔍 Start Batch", type="primary") and uploaded_file:
+        try:
+            filename = uploaded_file.name.lower()
+            if filename.endswith(".csv"):
+                stories = parse_csv_upload(uploaded_file.getvalue())
+            elif filename.endswith(".txt"):
+                stories = parse_txt_upload(uploaded_file.getvalue())
+            elif filename.endswith(".docx"):
+                stories = parse_docx_upload(uploaded_file.getvalue())
+            else:
+                stories = []
+            valid_stories, validation_warnings = validate_stories(stories, demo_config['max_stories_per_batch'], demo_config['min_story_length_chars'], demo_config['max_story_length_chars'])
+            st.session_state.story_queue = [{"id": str(uuid.uuid4()), "text": s} for s in valid_stories]
+            st.session_state.current_queue_position = 0
+            trigger_batch = True
+        except Exception as e:
+            st.session_state.session_log.log_event(st.session_state.current_session_id, "ERROR", {"stage": "upload", "error": str(e)})
+            st.error(f"Could not parse the uploaded file. Check format. ({e})")
             
-        valid_stories, validation_warnings = validate_stories(stories, demo_config['max_stories_per_batch'], demo_config['min_story_length_chars'], demo_config['max_story_length_chars'])
-        st.session_state.story_queue = [{"id": str(uuid.uuid4()), "text": s} for s in valid_stories]
-        st.session_state.current_queue_position = 0
-        trigger_batch = True
+st.markdown('</div>', unsafe_allow_html=True)
 
 if validation_warnings:
     for w in validation_warnings:
@@ -394,53 +406,76 @@ if st.session_state.current_story_text and st.session_state.current_pipeline_out
     st.divider()
     outputs = st.session_state.current_pipeline_outputs
     
-    st.header("Detection Results")
+    st.markdown('<div class="custom-card"><h3>Detection Results</h3>', unsafe_allow_html=True)
     if 'detection' in outputs:
-        cols = st.columns(7)
+        html_chips = []
         for i, (label, prob) in enumerate(outputs['detection'].items()):
-            color = "orange" if prob >= thresholds[label] else "green"
-            cols[i % 7].markdown(f"<div style='background-color: {color}; padding: 5px; border-radius: 5px; text-align: center; color: white;'><b>{label.replace('Ambiguity', '')}</b><br>{prob:.2f}</div>", unsafe_allow_html=True)
+            if prob >= 0.9:
+                chip_class = "danger"
+                icon = "⚠"
+            elif prob >= thresholds[label]:
+                chip_class = "warn"
+                icon = "⚠"
+            else:
+                chip_class = "pass"
+                icon = "✓"
+                
+            display_label = label.replace('Ambiguity', '')
+            html_chips.append(f"""
+            <div class="label-chip {chip_class}">
+                <div>{icon} {display_label}</div>
+                <div class="prob">{prob:.2f} (Threshold: {thresholds[label]:.2f})</div>
+            </div>
+            """)
+            
+        st.markdown(" ".join(html_chips), unsafe_allow_html=True)
+    st.markdown('</div>', unsafe_allow_html=True)
     
     if outputs.get('active_labels'):
-        st.header("Explanation (Integrated Gradients)")
+        st.markdown('<div class="custom-card"><h3>Explanation (Integrated Gradients)</h3>', unsafe_allow_html=True)
         if 'xai' in outputs:
             for label in outputs['active_labels']:
-                st.subheader(f"{label} ({outputs['detection'][label]:.2f})")
+                st.markdown(f"**{label} ({outputs['detection'][label]:.2f})**")
+                st.caption("Tokens contributing to this prediction")
                 exp = outputs['xai'].get(label)
                 if exp:
                     html_path = Path("outputs/refinement/temp_heatmap.html")
                     html_path.parent.mkdir(parents=True, exist_ok=True)
                     render_html_heatmap(exp['tokens'], exp['scores'], html_path)
                     with open(html_path, 'r', encoding='utf-8') as f:
-                        st.components.v1.html(f.read(), height=150)
+                        st.components.v1.html(f.read(), height=100)
+        st.markdown('</div>', unsafe_allow_html=True)
                         
-        st.header("Refinement")
+        st.markdown('<div class="custom-card"><h3>Refined Story</h3>', unsafe_allow_html=True)
         col1, col2 = st.columns(2)
         with col1:
-            st.subheader("Original Story")
+            st.markdown('<div class="story-box"><div class="story-box-title">Original Story</div>', unsafe_allow_html=True)
             st.write(st.session_state.current_story_text)
+            st.markdown('</div>', unsafe_allow_html=True)
             
         with col2:
-            st.subheader("Refined Story")
+            st.markdown('<div class="story-box"><div class="story-box-title">Refined Story</div>', unsafe_allow_html=True)
             if 'refinement' in outputs and 'refined_story' in outputs['refinement']:
                 ref_text = outputs['refinement']['refined_story']
                 # Highlight placeholders
                 for p in bridge.vocabulary:
-                    ref_text = ref_text.replace(p, f"<span style='background-color: #fff3cd; padding: 2px 4px; border-radius: 3px;'>{p}</span>")
+                    ref_text = ref_text.replace(p, f"<span class='placeholder-highlight'>{p}</span>")
                 st.markdown(ref_text, unsafe_allow_html=True)
+            st.markdown('</div>', unsafe_allow_html=True)
                 
         if 'refinement' in outputs and 'placeholders_used' in outputs['refinement']:
             st.markdown("**Placeholders inserted:**")
-            for p in outputs['refinement']['placeholders_used']:
-                st.markdown(f"- {p}")
+            ph_html = [f"<span class='label-chip pass'>{p}</span>" for p in outputs['refinement']['placeholders_used']]
+            st.markdown(" ".join(ph_html), unsafe_allow_html=True)
                 
             st.markdown("**Clarification questions:**")
             for i, q in enumerate(outputs['refinement'].get('clarification_questions', [])):
                 st.markdown(f"{i+1}. {q}")
+        st.markdown('</div>', unsafe_allow_html=True)
                 
         # Verification
         if 'verification' in outputs:
-            st.header("Verification (Before vs After)")
+            st.markdown('<div class="custom-card"><h3>Ambiguity Reduction</h3>', unsafe_allow_html=True)
             df_ver = pd.DataFrame({
                 "Before": outputs['verification']['probs_before'],
                 "After": outputs['verification']['probs_after']
@@ -448,11 +483,12 @@ if st.session_state.current_story_text and st.session_state.current_pipeline_out
             st.bar_chart(df_ver)
             
             delta = outputs['verification']['aggregate_delta']
-            st.write(f"Aggregate delta: **{delta:.4f}**")
+            st.write(f"Aggregate change: **{delta:.4f}** (negative = reduced)")
             if outputs['verification']['improved']:
-                st.success("✓ Refinement reduced ambiguity")
+                st.markdown("<div style='color: var(--success); font-weight: bold;'>✓ Refinement reduced ambiguity</div>", unsafe_allow_html=True)
             else:
-                st.warning("⚠ Refinement did not reduce ambiguity")
+                st.markdown("<div style='color: var(--warning); font-weight: bold;'>⚠ Refinement did not reduce ambiguity</div>", unsafe_allow_html=True)
+            st.markdown('</div>', unsafe_allow_html=True)
                 
         st.divider()
         
@@ -521,24 +557,30 @@ if st.session_state.current_story_text and st.session_state.current_pipeline_out
     else:
         st.success("No ambiguity detected! This user story passes the quality threshold.")
 
-# Session Summary Panel Update
+# REPORTS SECTION
+st.divider()
+st.markdown('<div class="custom-card"><h3>Export Results</h3>', unsafe_allow_html=True)
+st.write("Download your session artifacts or generated reports here.")
+cols = st.columns(4)
+
+if st.session_state.current_story_id:
+    report_bytes = per_story_report(st.session_state.current_session_id, st.session_state.current_story_id)
+    if report_bytes:
+        cols[0].download_button("📄 Per-story Report", data=report_bytes, file_name=f"report_{st.session_state.current_story_id}.docx", mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document")
+        
+sum_bytes = session_summary_report(st.session_state.current_session_id)
+if sum_bytes:
+    cols[1].download_button("📊 Session Summary", data=sum_bytes, file_name=f"session_summary_{st.session_state.current_session_id[:8]}.docx", mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document")
+    
+cq_bytes = clarification_questions_report(st.session_state.current_session_id)
+if cq_bytes:
+    cols[2].download_button("❓ Clarifications", data=cq_bytes, file_name=f"clarification_questions_{st.session_state.current_session_id[:8]}.docx", mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document")
+    
 summary = st.session_state.session_log.get_session_summary(st.session_state.current_session_id)
-with summary_placeholder.container():
-    if summary['started_at']:
-        try:
-            started = pd.to_datetime(summary['started_at'])
-            elapsed = datetime.datetime.now() - started
-            # remove microseconds
-            elapsed = elapsed - datetime.timedelta(microseconds=elapsed.microseconds)
-            st.text(f"Session active for: {elapsed}")
-        except:
-            pass
-    st.text(f"Input mode: {summary['input_mode']}")
-    st.text(f"Stories processed: {summary['stories_processed']}")
-    st.text(f"Refinements accepted: {summary['accepted']}")
-    st.text(f"Refinements regenerated: {summary['regenerated']}")
-    st.text(f"Stories skipped: {summary['skipped']}")
-    if st.session_state.current_batch_id:
-        batch_prog = st.session_state.session_log.get_batch_progress(st.session_state.current_batch_id)
-        if batch_prog:
-            st.text(f"Batch progress: {batch_prog['stories_reviewed']}/{batch_prog['total_stories']} reviewed")
+if summary['accepted'] >= demo_config.get('refined_requirements_doc_min_stories', 5):
+    req_bytes = refined_requirements_report(st.session_state.current_session_id)
+    if req_bytes:
+        cols[3].download_button("📑 Refined Requirements", data=req_bytes, file_name=f"refined_requirements_{st.session_state.current_session_id[:8]}.docx", mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document")
+else:
+    cols[3].button("📑 Refined Requirements", disabled=True, help="Accept at least 5 stories to generate this report.")
+st.markdown('</div>', unsafe_allow_html=True)

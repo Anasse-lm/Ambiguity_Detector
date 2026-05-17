@@ -1,0 +1,158 @@
+/* Color Palette Variables */
+:root {
+  --primary: #1F3864;
+  --secondary: #2E5395;
+  --success: #2A8A3E;
+  --warning: #D97706;
+  --danger: #B91C1C;
+  --highlight: #FEF3C7;
+  --background: #F8FAFC;
+  --surface: #FFFFFF;
+  --border: #E5E7EB;
+  --text-primary: #111827;
+  --text-secondary: #6B7280;
+}
+
+/* Custom Header */
+.branded-header {
+  background-color: var(--primary);
+  color: #FFFFFF;
+  padding: 2rem;
+  border-radius: 0.5rem;
+  margin-bottom: 2rem;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+}
+
+.branded-header h1 {
+  margin: 0;
+  font-size: 2rem;
+  font-weight: 700;
+  letter-spacing: -0.025em;
+  color: #FFFFFF;
+}
+
+.branded-header p {
+  margin: 0.5rem 0 0 0;
+  font-size: 1.1rem;
+  color: #E2E8F0;
+}
+
+.branded-header .version {
+  font-size: 0.8rem;
+  color: #94A3B8;
+  margin-top: 1rem;
+  display: block;
+}
+
+/* Custom Card Container */
+.custom-card {
+  background-color: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  padding: 1.5rem;
+  margin-bottom: 1.5rem;
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
+  animation: fadeIn 0.5s ease-out;
+}
+
+.custom-card h3 {
+  margin-top: 0;
+  color: var(--primary);
+  font-size: 1.25rem;
+  font-weight: 600;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+/* Label Chips */
+.label-chip {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 0.5rem 1rem;
+  border-radius: 0.375rem;
+  color: #FFFFFF !important;
+  font-weight: 600;
+  margin: 0.25rem;
+  min-width: 100px;
+}
+
+.label-chip.pass {
+  background-color: var(--success);
+}
+
+.label-chip.warn {
+  background-color: var(--warning);
+}
+
+.label-chip.danger {
+  background-color: var(--danger);
+}
+
+.label-chip .prob {
+  font-size: 0.8rem;
+  font-weight: 400;
+  opacity: 0.9;
+  color: #FFFFFF !important;
+}
+
+/* Placeholder Highlight */
+.placeholder-highlight {
+  background-color: var(--highlight);
+  color: var(--text-primary);
+  padding: 0.125rem 0.375rem;
+  border-radius: 0.25rem;
+  font-weight: 600;
+  border: 1px solid #FCD34D;
+}
+
+/* Original vs Refined Box */
+.story-box {
+  background-color: var(--background);
+  border: 1px solid var(--border);
+  border-radius: 0.375rem;
+  padding: 1rem;
+  font-size: 1rem;
+  line-height: 1.5;
+  color: var(--text-primary);
+  height: 100%;
+}
+
+.story-box-title {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 0.5rem;
+}
+
+/* Animation */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Example Quick-Fill Button Override */
+div[data-testid="stButton"] button {
+  transition: all 0.2s ease-in-out;
+}
+
+div[data-testid="stButton"] button:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+}
+
+/* Metric Row Container */
+.metric-container {
+  background-color: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  padding: 1rem;
+  margin-bottom: 1.5rem;
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1);
+  display: flex;
+  justify-content: space-around;
+}

@@ -5,6 +5,11 @@ The interactive Streamlit demonstration app brings together the DeBERTa ambiguit
 
 It implements a unified batch review workflow across three input modes: Single Story, Multiple Stories (newline separated), and Document Upload (CSV, TXT, DOCX). It automatically handles model pre-warming to minimize CPU latency on the first request and enforces strict validation bounds (e.g., maximum 50 stories per batch) to ensure system stability.
 
+## Architecture and Framing
+**LLM Scoping**: The demo uses Google Gemini as its single LLM backend, consistent with the empirical evaluation in earlier phases. The underlying `RefinementBackend` interface is pluggable, supporting future multi-LLM comparison as identified future work. The user-facing interface does not expose a model picker to maintain consistency between what the demo shows and what was empirically evaluated.
+
+**Batch Evaluation**: The batch upload capability demonstrates the system handles realistic refinement workflows even though the empirical evaluation was conducted on the per-story batch evaluator on 210 stories.
+
 ## Infrastructure for Future User Studies
 The session logging mechanism records every user interaction in a structured SQLite log including input mode, batch progression, accept/regenerate/skip decisions, and timing. **This thesis does not conduct a formal user study** because recruiting practicing requirements engineers was not feasible within the thesis scope. The log infrastructure exists as future-work scaffolding: a future researcher could attach a user study protocol to the existing logging interface without modifying the demo. Aggregate session statistics derived from the log are reported in the thesis Discussion chapter as descriptive evidence about system usage, not as evaluative claims about user preferences.
 
