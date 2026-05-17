@@ -11,3 +11,4 @@ outputs/
 *.zip
 model_part_*
 remote_outputs_part_*
+outputs/refinement_artifacts_*.zip

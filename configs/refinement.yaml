@@ -1,0 +1,10 @@
+model_name: "gemini-2.5-flash"
+temperature: 0.2
+max_output_tokens: 1024
+top_p: 0.9
+max_retries: 3
+retry_delay_seconds: 2.0
+cache_dir: "outputs/refinement/cache"
+cache_enabled: true
+top_k_evidence_tokens: 5
+few_shot_examples_path: "configs/few_shot_examples.yaml"

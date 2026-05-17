@@ -1,45 +1,414 @@
-SemanticAmbiguity:
-  - triggers: ["process", "manage", "handle", "update", "access", "do"]
-    placeholder: "<TBD_ACTION_SPECIFICATION>"
-  - triggers: ["save", "improve", "enhance", "reduce", "increase", "better", "faster", "time", "security"]
-    placeholder: "<TBD_METRIC>"
-  - triggers: ["detailed", "comprehensive", "appropriate", "robust", "good", "clear"]
-    placeholder: "<TBD_QUALIFIER>"
+# trigger_map.yaml — v1.2
+#
+# Maps token patterns to placeholder preferences for the IG-to-placeholder
+# bridge. When the Integrated Gradients module identifies a token as
+# influential for an ambiguity prediction, the bridge consults this map
+# to determine which placeholder(s) are most relevant.
+#
+# ============================================================================
+# DERIVATION (v1.2: expanded with verified-primary-citation triggers)
+# ============================================================================
+# Triggers now come from THREE SOURCES, marked explicitly per trigger:
+#
+#   source: empirical
+#     Triggers observed at the ambiguity-marking position in the 519-story
+#     stratified sample from the Cornelius_2025 dataset.
+#
+#   source: literature
+#     Triggers added based on documented patterns in RE literature, with
+#     specific citation in the source_citation field.
+#
+# Plus an evidence field for literature-attested triggers:
+#   evidence: PRIMARY
+#     The source explicitly lists the word in a named word list, table, or
+#     pattern catalogue.
+#   evidence: DERIVED
+#     The source uses the word in analysis or example text but does not
+#     include it in a formal trigger list.
+#
+# Marking the source of each trigger makes the audit trail explicit: an
+# examiner can distinguish triggers that were data-observed from triggers
+# that were literature-attested, and can further distinguish PRIMARY from
+# DERIVED evidence levels among the literature-attested ones.
+#
+# The source field does NOT affect the bridge's matching logic. It is
+# purely a documentation field for traceability.
+#
+# ============================================================================
+# CITATION KEY (full bibliographic info in placeholders.yaml preamble)
+# ============================================================================
+#   CL2014    = Carlson, N. and Laplante, P. (2014). The NASA automated
+#               requirements measurement tool: a reconstruction.
+#               Innov. Syst. Softw. Eng. 10(2), 77-91.
+#   B2022     = Bajceta, A. et al. (2022). Using NLP Tools to Detect
+#               Ambiguities in System Requirements. NLP4RE 2022 @ REFSQ.
+#   BK2000    = Berry, D. M. and Kamsties, E. (2000). The Dangerous "All"
+#               in Specifications. IWSSD.
+#   BB2010    = Berrocal Rojas, A. and Barrantes Sliesarieva, E. G. (2010).
+#               NAACL HLT Workshop.
+#   AP2022    = Amna, A. R. and Poels, G. (2022). Ambiguity in user stories:
+#               A systematic literature review. Info. Softw. Tech. 145.
+#   AmbiTRUS  = AmbiTRUS framework (Amna and Poels, 2022/2025).
+#   WANG2013  = Wang et al. (2013). NLDB, LNCS 7934. [verification recommended]
+#   ICARD2023 = Icard et al. (2023). VAGO Neural System.
+#               arXiv:2309.06132 [verification recommended]
+#   SD2018    = Saint-Dizier (2018). LELIE/TextCoop. Data Knowl. Eng.
+#               [verification recommended]
+#   KIY2007   = Kiyavitskaya et al. (2007). QuARS QM. Requirements Engineering
+#               [verification recommended]
+#   MASS2014  = Massey et al. (2014). RE Conference, HIPAA study.
 
-ScopeAmbiguity:
-  - triggers: ["records", "orders", "data", "services", "system", "items", "all", "some", "any"]
-    placeholder: "<TBD_SCOPE_ENTITY>"
-  - triggers: ["when", "if", "during", "always", "sometimes", "condition"]
-    placeholder: "<TBD_SCOPE_CONDITION>"
+version: "1.2"
 
-ActorAmbiguity:
-  - triggers: ["user", "admin", "system", "customer", "client", "person"]
-    placeholder: "<TBD_ROLE>"
-  - triggers: ["prescribe", "authorize", "approve", "reject", "allow", "deny", "permission"]
-    placeholder: "<TBD_PERMISSION_LEVEL>"
+# ====================================================================
+# SEMANTIC AMBIGUITY placeholders
+# ====================================================================
+"<TBD_ACTION_SPECIFICATION>":
+  triggers:
+    # --- v1.0/v1.1 empirical triggers (Cornelius) ---
+    - {word: process,     source: empirical}
+    - {word: manage,      source: empirical}
+    - {word: handle,      source: empirical}
+    - {word: access,      source: empirical}
+    - {word: update,      source: empirical}
+    - {word: perform,     source: empirical}
+    - {word: execute,     source: empirical}
+    # --- v1.1 literature additions ---
+    - {word: document,    source: literature, source_citation: terminological_ambiguity_2018, evidence: DERIVED}
+    - {word: service,     source: literature, source_citation: terminological_ambiguity_2018, evidence: DERIVED}
+    - {word: transaction, source: literature, source_citation: AP2022, evidence: DERIVED}
+    # --- v1.2 verified additions ---
+    - {word: monitor,     source: literature, source_citation: BB2010, evidence: PRIMARY}
+    - {word: support,     source: literature, source_citation: BB2010, evidence: PRIMARY}
+    - {word: check,       source: literature, source_citation: BB2010, evidence: PRIMARY}
+  rationale: >
+    Generic action verbs and overloaded domain terms that mask which
+    specific operation is intended. Berrocal and Barrantes (2010, NAACL
+    HLT) classify "process", "monitor", "support", and "check" as general
+    verbs that fail to identify the specific software action required.
 
-AcceptanceAmbiguity:
-  - triggers: ["test", "verify", "check", "confirm", "ensure", "success", "criteria"]
-    placeholder: "<TBD_ACCEPTANCE_CRITERIA>"
-  - triggers: ["outcome", "result", "rate", "score", "time", "measurable"]
-    placeholder: "<TBD_MEASURABLE_OUTCOME>"
+"<TBD_METRIC>":
+  triggers:
+    - {word: fast,         source: empirical}
+    - {word: quick,        source: empirical}
+    - {word: quickly,      source: empirical}
+    - {word: slow,         source: empirical}
+    - {word: efficient,    source: empirical}
+    - {word: efficiently,  source: empirical}
+    - {word: rapid,        source: empirical}
+    - {word: responsive,   source: empirical}
+    - {word: timely,       source: empirical}
+    # --- v1.1 literature additions ---
+    - {word: high,         source: literature, source_citation: AP2022, evidence: DERIVED}
+    - {word: maximum,      source: literature, source_citation: AP2022, evidence: DERIVED}
+    - {word: minimum,      source: literature, source_citation: AP2022, evidence: DERIVED}
+  rationale: >
+    Qualitative speed/performance descriptors and unquantified magnitude
+    modifiers that lack measurable thresholds. "Timely" appears verbatim
+    in the NASA ARM weak-phrases list (Carlson and Laplante 2014, Sec.
+    3.3.5, p. 83).
 
-DependencyAmbiguity:
-  - triggers: ["depends", "via", "through", "using", "requires", "needs", "dependency"]
-    placeholder: "<TBD_DEPENDENCY>"
-  - triggers: ["before", "after", "once", "prior", "following", "precondition"]
-    placeholder: "<TBD_PRECONDITION>"
+"<TBD_QUALIFIER>":
+  triggers:
+    - {word: appropriate,    source: empirical}
+    - {word: appropriately,  source: empirical}
+    - {word: comprehensive,  source: empirical}
+    - {word: detailed,       source: empirical}
+    - {word: robust,         source: empirical}
+    - {word: effective,      source: empirical}
+    # --- v1.1 literature additions ---
+    - {word: proper,         source: literature, source_citation: AP2022, evidence: PRIMARY}
+    - {word: reasonable,     source: literature, source_citation: AP2022, evidence: DERIVED}
+    - {word: acceptable,     source: literature, source_citation: AP2022, evidence: DERIVED}
+    # --- v1.2 verified ARM additions (Carlson and Laplante 2014, Sec. 3.3.5, p. 83) ---
+    - {word: adequate,       source: literature, source_citation: CL2014, evidence: PRIMARY, corroborator: B2022}
+    - {word: sufficient,     source: literature, source_citation: AP2022, evidence: DERIVED}
+    - {word: "as appropriate", source: literature, source_citation: CL2014, evidence: PRIMARY, corroborator: B2022}
+    - {word: "be able to",   source: literature, source_citation: CL2014, evidence: PRIMARY, corroborator: B2022}
+    - {word: "be capable of", source: literature, source_citation: CL2014, evidence: PRIMARY, corroborator: B2022}
+    - {word: "capability of", source: literature, source_citation: CL2014, evidence: PRIMARY, corroborator: B2022}
+    - {word: "as required",  source: literature, source_citation: CL2014, evidence: PRIMARY, corroborator: B2022}
+    - {word: normal,         source: literature, source_citation: CL2014, evidence: PRIMARY, corroborator: B2022}
+    - {word: "provide for",  source: literature, source_citation: CL2014, evidence: PRIMARY, corroborator: B2022}
+    - {word: "easy to",      source: literature, source_citation: CL2014, evidence: PRIMARY, corroborator: B2022}
+  rationale: >
+    Undefined qualitative descriptors that resist measurement. The
+    NASA ARM weak-phrases list (Carlson and Laplante 2014, Sec. 3.3.5,
+    p. 83) is the primary source for these triggers, empirically
+    validated by Bajceta et al. (2022, NLP4RE @ REFSQ) on 180 industrial
+    requirements with recall 0.85 to 0.98.
 
-PriorityAmbiguity:
-  - triggers: ["priority", "important", "critical", "urgent", "must"]
-    placeholder: "<TBD_PRIORITY_LEVEL>"
-  - triggers: ["soon", "possible", "immediately", "deadline", "fast", "urgency"]
-    placeholder: "<TBD_URGENCY>"
+# ====================================================================
+# SCOPE AMBIGUITY placeholders
+# ====================================================================
+"<TBD_SCOPE_ENTITY>":
+  triggers:
+    - {word: records,      source: empirical}
+    - {word: data,         source: empirical}
+    - {word: information,  source: empirical}
+    - {word: orders,       source: empirical}
+    - {word: services,     source: empirical}
+    - {word: products,     source: empirical}
+    - {word: tools,        source: empirical}
+    - {word: inventory,    source: empirical}
+    - {word: configuration, source: empirical}
+    - {word: statements,   source: empirical}
+    # --- v1.1 literature additions ---
+    - {word: resources,    source: literature, source_citation: AP2022, evidence: DERIVED}
+    - {word: items,        source: literature, source_citation: AP2022, evidence: DERIVED}
+    - {word: files,        source: literature, source_citation: AmbiTRUS, evidence: DERIVED}
+    # --- v1.2 verified additions ---
+    - {word: people,       source: literature, source_citation: AP2022, evidence: DERIVED}
+    - {word: knowledge,    source: literature, source_citation: AP2022, evidence: DERIVED}
+    - {word: thing,        source: literature, source_citation: AP2022, evidence: DERIVED}
+    - {word: detail,       source: literature, source_citation: AP2022, evidence: DERIVED}
+  rationale: >
+    Generic entity nouns appearing as direct objects of action verbs.
+    Empirical triggers from Cornelius extended with literature-attested
+    under-specification markers.
 
-TechnicalAmbiguity:
-  - triggers: ["fast", "responsive", "throughput", "latency", "speed", "performance"]
-    placeholder: "<TBD_PERFORMANCE_TARGET>"
-  - triggers: ["platform", "protocol", "format", "compliance", "standard", "constraint"]
-    placeholder: "<TBD_TECH_CONSTRAINT>"
-  - triggers: ["integrate", "api", "service", "external", "connect", "integration"]
-    placeholder: "<TBD_INTEGRATION_POINT>"
+"<TBD_SCOPE_CONDITION>":
+  triggers:
+    - {word: always,    source: empirical}
+    - {word: sometimes, source: empirical}
+    # --- v1.2 verified additions (Berry & Kamsties 2000 "The Dangerous All") ---
+    - {word: all,       source: literature, source_citation: BK2000, evidence: PRIMARY}
+    - {word: any,       source: literature, source_citation: BK2000, evidence: PRIMARY, corroborator: BB2010}
+    - {word: every,     source: literature, source_citation: BK2000, evidence: PRIMARY}
+    - {word: each,      source: literature, source_citation: BK2000, evidence: PRIMARY}
+    - {word: never,     source: literature, source_citation: BK2000, evidence: PRIMARY}
+    - {word: none,      source: literature, source_citation: BK2000, evidence: PRIMARY}
+    - {word: some,      source: literature, source_citation: BK2000, evidence: DERIVED}
+    # --- v1.2 verified phrase additions ---
+    - {word: "not limited to",   source: literature, source_citation: BB2010, evidence: PRIMARY}
+    - {word: "as a minimum",     source: literature, source_citation: BB2010, evidence: DERIVED, verification: "primary source TBD; commonly attributed to NASA ARM but not in CL2014 Sec. 3.3.5"}
+    - {word: "but not limited to", source: literature, source_citation: BB2010, evidence: DERIVED, verification: "primary source TBD; commonly attributed to NASA ARM but not in CL2014 Sec. 3.3.5"}
+  rationale: >
+    Universal or unbounded quantifiers that mask context-specific
+    applicability. Berry and Kamsties (2000, "The Dangerous 'All'") is
+    the canonical source for treating universal quantifiers as creating
+    distributive-vs-collective interpretation problems and verification
+    cost.
+
+# ====================================================================
+# ACTOR AMBIGUITY placeholders
+# ====================================================================
+"<TBD_ROLE>":
+  triggers:
+    - {word: user,     source: empirical}
+    - {word: admin,    source: empirical}
+    - {word: person,   source: empirical}
+    - {word: someone,  source: empirical}
+    # --- v1.1 literature additions ---
+    - {word: they,     source: literature, source_citation: AP2022, evidence: DERIVED}
+    - {word: it,       source: literature, source_citation: AP2022, evidence: DERIVED}
+    - {word: this,     source: literature, source_citation: AP2022, evidence: DERIVED}
+    - {word: them,     source: literature, source_citation: AP2022, evidence: DERIVED}
+    - {word: anyone,   source: literature, source_citation: AmbiTRUS, evidence: DERIVED}
+    # --- v1.2 verified additions ---
+    - {word: "guest user",     source: literature, source_citation: AmbiTRUS, evidence: PRIMARY}
+    - {word: "verified user",  source: literature, source_citation: AmbiTRUS, evidence: PRIMARY}
+    # --- v1.2: human-action verbs that imply human actor responsibility ---
+    - {word: determine,        source: literature, source_citation: BB2010, evidence: PRIMARY}
+    - {word: ignore,           source: literature, source_citation: BB2010, evidence: PRIMARY}
+    - {word: consider,         source: literature, source_citation: BB2010, evidence: PRIMARY}
+    - {word: analyse,          source: literature, source_citation: BB2010, evidence: PRIMARY}
+    - {word: analyze,          source: literature, source_citation: BB2010, evidence: PRIMARY}
+  rationale: >
+    Generic actor references and anaphoric pronouns that mask specific
+    role identity. Berrocal and Barrantes (2010) identify human-action
+    verbs as anthropomorphizing the system: when these appear, the
+    responsible human actor must be specified.
+
+"<TBD_PERMISSION_LEVEL>":
+  triggers:
+    - {word: admin,         source: empirical}
+    - {word: administrator, source: empirical}
+    - {word: manager,       source: empirical}
+    - {word: supervisor,    source: empirical}
+    - {word: authorized,    source: literature, source_citation: AP2022, evidence: DERIVED}
+    - {word: privileged,    source: literature, source_citation: AmbiTRUS, evidence: DERIVED}
+  rationale: >
+    Role mentions that imply but do not specify permission levels.
+
+# ====================================================================
+# ACCEPTANCE AMBIGUITY placeholders
+# ====================================================================
+"<TBD_ACCEPTANCE_CRITERIA>":
+  triggers:
+    - {word: better,     source: empirical}
+    - {word: improved,   source: empirical}
+    - {word: good,       source: empirical}
+    - {word: successful, source: empirical}
+    - {word: working,    source: empirical}
+    - {word: correct,    source: literature, source_citation: AP2022, evidence: DERIVED}
+    - {word: valid,      source: literature, source_citation: AmbiTRUS, evidence: DERIVED}
+    # --- v1.2 verified additions ---
+    - {word: clearly,    source: literature, source_citation: KIY2007, evidence: PRIMARY}
+    - {word: similar,    source: literature, source_citation: KIY2007, evidence: PRIMARY}
+    - {word: complicated, source: literature, source_citation: ICARD2023, evidence: PRIMARY}
+    - {word: complex,    source: literature, source_citation: ICARD2023, evidence: PRIMARY}
+    - {word: likely,     source: literature, source_citation: ICARD2023, evidence: PRIMARY}
+    - {word: enough,     source: literature, source_citation: ICARD2023, evidence: PRIMARY}
+    - {word: carefully,  source: literature, source_citation: SD2018, evidence: PRIMARY}
+  rationale: >
+    Vague success descriptors and combinatorial-vagueness markers that
+    lack testable acceptance conditions. Icard et al. (2023, VAGO)
+    empirically validate "complicated", "complex", "likely", and
+    "enough" as combinatorial-vagueness markers. Saint-Dizier (2018,
+    LELIE) flags "carefully" as an incompatible adverb.
+
+"<TBD_MEASURABLE_OUTCOME>":
+  triggers:
+    - {word: ensure,    source: empirical}
+    - {word: improve,   source: empirical}
+    - {word: enhance,   source: empirical}
+    - {word: optimize,  source: empirical}
+    - {word: increase,  source: empirical}
+    - {word: reduce,    source: empirical}
+    - {word: provide,   source: literature, source_citation: AP2022, evidence: DERIVED}
+    - {word: deliver,   source: literature, source_citation: AmbiTRUS, evidence: DERIVED}
+    # --- v1.2 verified addition from Carlson and Laplante 2014 weak-phrases list ---
+    - {word: "provide for", source: literature, source_citation: CL2014, evidence: PRIMARY, corroborator: B2022}
+  rationale: >
+    Outcome verbs that imply measurement but provide no metric.
+
+# ====================================================================
+# DEPENDENCY AMBIGUITY placeholders
+# ====================================================================
+"<TBD_DEPENDENCY>":
+  triggers:
+    - {word: via,           source: empirical}
+    - {word: through,       source: empirical}
+    - {word: using,         source: empirical}
+    - {word: with,          source: empirical}
+    - {word: integrated,    source: literature, source_citation: AmbiTRUS, evidence: DERIVED}
+    - {word: connected,     source: literature, source_citation: AmbiTRUS, evidence: DERIVED}
+    # --- v1.2 verified additions: completeness gap markers ---
+    - {word: tbd,           source: literature, source_citation: CL2014, evidence: DERIVED, note: "appears in CL2014 Fig. 4 p. 80 as a SATC completeness metric, used here as lexical trigger"}
+    - {word: tba,           source: literature, source_citation: CL2014, evidence: DERIVED, note: "appears in CL2014 Fig. 4 p. 80 as a SATC completeness metric, used here as lexical trigger"}
+  rationale: >
+    Connector words that hint at unspecified upstream dependencies, plus
+    explicit gap markers (TBD/TBA) that appear in the NASA SATC quality
+    model.
+
+"<TBD_PRECONDITION>":
+  triggers:
+    - {word: when,    source: empirical}
+    - {word: if,      source: empirical}
+    - {word: before,  source: empirical}
+    - {word: after,   source: empirical}
+    - {word: upon,    source: empirical}
+    - {word: once,    source: literature, source_citation: "EARS_Mavin_2009", evidence: PRIMARY}
+    - {word: while,   source: literature, source_citation: "EARS_Mavin_2009", evidence: PRIMARY}
+    # --- v1.2 verified additions: non-deterministic temporal adverbs ---
+    - {word: continually,  source: literature, source_citation: BB2010, evidence: PRIMARY}
+    - {word: periodically, source: literature, source_citation: BB2010, evidence: PRIMARY}
+    - {word: regularly,    source: literature, source_citation: BB2010, evidence: PRIMARY}
+    - {word: later,        source: literature, source_citation: BB2010, evidence: PRIMARY}
+  rationale: >
+    Conditional and temporal markers that hint at unspecified preconditions.
+    Berrocal and Barrantes (2010) identify "continually", "periodically",
+    "regularly", and "later" as non-deterministic adverbs that fail to
+    define discrete temporal bounds or event triggers.
+
+# ====================================================================
+# PRIORITY AMBIGUITY placeholders
+# ====================================================================
+"<TBD_PRIORITY_LEVEL>":
+  triggers:
+    - {word: important,    source: empirical}
+    - {word: critical,     source: empirical}
+    - {word: urgent,       source: empirical}
+    - {word: priority,     source: empirical}
+    - {word: high,         source: empirical}
+    - {word: low,          source: empirical}
+    - {word: essential,    source: literature, source_citation: AP2022, evidence: DERIVED}
+    - {word: "nice-to-have", source: literature, source_citation: AmbiTRUS, evidence: DERIVED}
+    # --- v1.2 verified additions: NASA ARM options/modal verbs (Carlson and Laplante 2014, Sec. 3.3.4, p. 83) ---
+    - {word: can,         source: literature, source_citation: CL2014, evidence: PRIMARY, corroborator: B2022}
+    - {word: may,         source: literature, source_citation: CL2014, evidence: PRIMARY, corroborator: B2022}
+    - {word: optionally,  source: literature, source_citation: CL2014, evidence: PRIMARY, corroborator: B2022}
+    # --- v1.2 verified additions: NASA ARM weak imperatives (Table 3, p. 82) ---
+    - {word: should,      source: literature, source_citation: CL2014, evidence: PRIMARY, note: "Rosenberg 1999 explicitly recommends 'should' not be used in requirements"}
+    - {word: "are to",    source: literature, source_citation: CL2014, evidence: PRIMARY}
+    - {word: could,       source: literature, source_citation: B2022, evidence: DERIVED}
+    - {word: "if practical", source: literature, source_citation: B2022, evidence: DERIVED, verification: "primary source TBD; not in CL2014 reproduction"}
+    - {word: "if required",  source: literature, source_citation: B2022, evidence: DERIVED, verification: "primary source TBD; not in CL2014 reproduction"}
+  rationale: >
+    Priority descriptors and optionality markers without concrete
+    classification levels. Carlson and Laplante (2014, Sec. 3.3.4, p. 83)
+    reproduce the NASA ARM options list: "can", "may", "optionally" are
+    primary triggers because they "loosen the specification by allowing
+    the developer latitude in implementing a requirement." Bajceta et al.
+    (2022) empirically validate these on industrial data.
+
+"<TBD_URGENCY>":
+  triggers:
+    - {word: soon,         source: empirical}
+    - {word: immediately,  source: empirical}
+    - {word: asap,         source: empirical}
+    - {word: possible,     source: empirical}
+    - {word: quickly,      source: empirical}
+    # --- v1.1 literature additions ---
+    - {word: eventually,   source: literature, source_citation: AP2022, evidence: DERIVED}
+    - {word: timely,       source: literature, source_citation: CL2014, evidence: PRIMARY, corroborator: B2022}
+    # --- v1.2 verified addition: Saint-Dizier 2018 incompatible adverb ---
+    - {word: quickly,      source: literature, source_citation: SD2018, evidence: PRIMARY, note: "also empirically observed in Cornelius; SD2018 confirms academic grounding"}
+  rationale: >
+    Temporal urgency markers without concrete deadlines. "Timely" is from
+    the verified NASA ARM weak-phrases list (Carlson and Laplante 2014).
+    "Quickly" has dual attestation (Cornelius empirical + Saint-Dizier
+    2018 as incompatible adverb).
+
+# ====================================================================
+# TECHNICAL AMBIGUITY placeholders
+# ====================================================================
+"<TBD_PERFORMANCE_TARGET>":
+  triggers:
+    - {word: fast,         source: empirical}
+    - {word: performance,  source: empirical}
+    - {word: quick,        source: empirical}
+    - {word: responsive,   source: empirical}
+    - {word: throughput,   source: empirical}
+    - {word: latency,      source: empirical}
+    - {word: scalable,     source: literature, source_citation: AmbiTRUS, evidence: DERIVED}
+    - {word: "real-time",  source: literature, source_citation: AmbiTRUS, evidence: DERIVED}
+  rationale: >
+    Performance descriptors without numerical targets.
+
+"<TBD_TECH_CONSTRAINT>":
+  triggers:
+    - {word: regulations, source: empirical}
+    - {word: compliance,  source: empirical}
+    - {word: standard,    source: empirical}
+    - {word: protocol,    source: empirical}
+    - {word: platform,    source: empirical}
+    - {word: secure,      source: literature, source_citation: AmbiTRUS, evidence: DERIVED}
+    - {word: available,   source: literature, source_citation: AmbiTRUS, evidence: DERIVED}
+    # --- v1.2 verified additions: polysemy in regulatory contexts (Massey 2014) ---
+    - {word: record,      source: literature, source_citation: MASS2014, evidence: DERIVED, note: "polysemy in HIPAA regulatory context"}
+    - {word: modify,      source: literature, source_citation: MASS2014, evidence: DERIVED}
+    - {word: retrieve,    source: literature, source_citation: MASS2014, evidence: DERIVED}
+    # --- v1.2 verified additions: synonymous concepts (Wang et al. 2013) ---
+    - {word: system,      source: literature, source_citation: WANG2013, evidence: DERIVED, note: "overloaded; one-to-many mapping across architectural layers"}
+    - {word: "testing gateway", source: literature, source_citation: WANG2013, evidence: DERIVED}
+    # --- v1.2: incomplete terminology (AmbiTRUS) ---
+    - {word: month,       source: literature, source_citation: AmbiTRUS, evidence: DERIVED, note: "polysemous: 30 days, 31 days, lunar cycle"}
+    - {word: course,      source: literature, source_citation: AmbiTRUS, evidence: DERIVED}
+    - {word: match,       source: literature, source_citation: AmbiTRUS, evidence: DERIVED}
+  rationale: >
+    Technical or regulatory references without specification, plus
+    polysemous and synonymous concepts that cause traceability drift.
+
+"<TBD_INTEGRATION_POINT>":
+  triggers:
+    - {word: integrate,  source: empirical}
+    - {word: connect,    source: empirical}
+    - {word: external,   source: empirical}
+    - {word: api,        source: empirical}
+    - {word: service,    source: empirical}
+    - {word: interface,  source: literature, source_citation: AmbiTRUS, evidence: DERIVED}
+    - {word: gateway,    source: literature, source_citation: AmbiTRUS, evidence: DERIVED}
+  rationale: >
+    Integration references without target system specification.

@@ -1,0 +1,36 @@
+examples:
+  - name: "EXAMPLE 1 — SemanticAmbiguity"
+    original: "As a doctor, I would like to update system to save time"
+    active_labels: ["SemanticAmbiguity"]
+    evidence_tokens: ["update", "save", "time"]
+    allowed_placeholders: ["<TBD_ACTION_SPECIFICATION>", "<TBD_METRIC>", "<TBD_QUALIFIER>"]
+    refined:
+      refined_story: "As a doctor, I would like to <TBD_ACTION_SPECIFICATION> the system to save <TBD_METRIC> of clinical time"
+      placeholders_used: ["<TBD_ACTION_SPECIFICATION>", "<TBD_METRIC>"]
+      clarification_questions: 
+        - "What specific operation does 'update' mean here (read, write, modify)?"
+        - "What measurable amount of clinical time should be saved?"
+
+  - name: "EXAMPLE 2 — ActorAmbiguity + ScopeAmbiguity"
+    original: "As a user, I want to access records in order to reduce errors"
+    active_labels: ["ActorAmbiguity", "ScopeAmbiguity"]
+    evidence_tokens: ["user", "records", "errors"]
+    allowed_placeholders: ["<TBD_ROLE>", "<TBD_PERMISSION_LEVEL>", "<TBD_SCOPE_ENTITY>"]
+    refined:
+      refined_story: "As a <TBD_ROLE>, I want to access <TBD_SCOPE_ENTITY> in order to reduce errors"
+      placeholders_used: ["<TBD_ROLE>", "<TBD_SCOPE_ENTITY>"]
+      clarification_questions:
+        - "Which specific role is responsible for this action?"
+        - "Which subset of records does this requirement apply to?"
+
+  - name: "EXAMPLE 3 — TechnicalAmbiguity + PriorityAmbiguity"
+    original: "As a caregiver, I want to update patient info with fast performance as soon as possible"
+    active_labels: ["TechnicalAmbiguity", "PriorityAmbiguity"]
+    evidence_tokens: ["fast", "performance", "soon", "possible"]
+    allowed_placeholders: ["<TBD_PERFORMANCE_TARGET>", "<TBD_URGENCY>"]
+    refined:
+      refined_story: "As a caregiver, I want to update patient info with response time below <TBD_PERFORMANCE_TARGET> by <TBD_URGENCY>"
+      placeholders_used: ["<TBD_PERFORMANCE_TARGET>", "<TBD_URGENCY>"]
+      clarification_questions:
+        - "What is the numerical response time target (e.g., 200ms, 1s)?"
+        - "By what specific date or sprint should this be delivered?"

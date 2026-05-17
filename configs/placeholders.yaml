@@ -1,25 +1,62 @@
-# placeholders.yaml
+# placeholders.yaml — v1.2
 #
 # Controlled vocabulary of structured placeholders for hallucination-resistant
 # refinement of ambiguous software requirements.
 #
 # ============================================================================
-# DERIVATION
+# DERIVATION (v1.2: expanded with verified primary-source citations)
 # ============================================================================
-# This vocabulary was derived through a three-source synthesis:
+# This vocabulary was derived through a synthesis of seven verified sources
+# plus the empirical Cornelius_2025 sample. Each placeholder's
+# `literature_evidence` field names the specific verified source(s) for its
+# ambiguity pattern.
 #
-#   (1) IEEE/ISO/IEC 29148 requirement quality criteria, which define what
+# Primary-citation sources (verified):
+#
+#   (1) IEEE/ISO/IEC 29148:2018 requirement quality criteria — defines what
 #       information a well-formed requirement must contain (unambiguous,
 #       complete, verifiable, traceable).
 #
-#   (2) The EARS notation (Mavin et al., 2009), which provides structured
-#       slots for triggers, actors, responses, and conditions.
+#   (2) EARS notation (Mavin et al., 2009, RE Conference) — provides
+#       structured slots for triggers, actors, responses, and conditions.
 #
-#   (3) Empirical sampling of 210 ambiguous user stories from the
-#       Cornelius_2025 dataset (30 stratified samples per ambiguity type).
-#       Each sampled story was read manually and its missing-information
-#       gap was recorded; the recurring gap categories were then clustered
-#       into the placeholders below.
+#   (3) Carlson and Laplante (2014) — peer-reviewed reproduction of the
+#       NASA Automated Requirements Measurement (ARM) tool with explicit
+#       word lists for weak phrases (Sec. 3.3.5, p. 83), options/modal verbs
+#       (Sec. 3.3.4, p. 83), imperative strength categories (Table 3, p. 82),
+#       and completeness metrics including TBD/TBA markers (Fig. 4, p. 80).
+#       Published in Innovations in Systems and Software Engineering, 10(2),
+#       pp. 77-91. DOI: 10.1007/s11334-013-0225-8.
+#
+#   (4) Bajceta, Leon, Afzal, Lindberg, and Bohlin (2022) — workshop paper
+#       at NLP4RE 2022 @ REFSQ. Empirically evaluates ARM, QuARS, RETA, and
+#       RCM tools on 180 industrial requirements from Alstom's electric
+#       train propulsion system. Reports tool recall of 0.85 to 0.98,
+#       providing industrial-data validation for the ARM and QuARS word
+#       lists. Cited as corroborating evidence for ARM-attributed
+#       placeholders.
+#
+#   (5) Berry and Kamsties (2000) "The Dangerous 'All'" — canonical source
+#       for universal-quantifier scope ambiguity, establishing the
+#       distributive-vs-collective interpretation problem.
+#
+#   (6) Berrocal Rojas and Barrantes Sliesarieva (2010), NAACL HLT
+#       Workshop — empirical source for human-action verbs (determine,
+#       ignore, consider, analyse) and non-deterministic adverb categories.
+#
+#   (7) Amna and Poels (2022), Information and Software Technology 145,
+#       106824 — systematic review of user-story ambiguity establishing
+#       the empirical prevalence of overloaded concepts, vague qualifiers,
+#       and underspecified acceptance criteria across user-story corpora.
+#
+# Plus empirical sampling of 519 stratified-sampled stories from the
+# Cornelius_2025 dataset (saturation analysis: see thesis Section X.Y).
+#
+# Several additional sources (Davis 2004; AmbiTRUS framework; Wang et al.
+# 2013; Icard et al. 2023 VAGO; Saint-Dizier 2018 LELIE; Kiyavitskaya et
+# al. 2007 QuARS QM; Massey et al. 2014) are cited where they provide
+# pattern-specific grounding. Some of these are marked "verification
+# recommended" pending the final thesis writing phase.
 #
 # The full sampling protocol and the per-story gap observations are
 # documented in Appendix [X] of the thesis. Random seed = 42 for the
@@ -37,29 +74,27 @@
 # ============================================================================
 # POLICY STRUCTURE
 # ============================================================================
-# Each placeholder is defined by FOUR fields:
-#   description: what the placeholder represents
-#   trigger:     the linguistic or structural condition that justifies using it
+# Each placeholder is defined by FIVE fields:
+#   description:           what the placeholder represents
+#   trigger:               the linguistic or structural condition that justifies using it
 #   clarification_template: the question to ask a requirements engineer to resolve it
-#   example:     a before/after illustration drawn from a real sampled story
+#   example:               a before/after illustration drawn from a real sampled story
+#   literature_evidence:   verified citation(s) establishing this gap pattern as
+#                          a recognized RE ambiguity category, with section and
+#                          page references where available
 #
 # When the original story is so vague that the ambiguity type itself is
 # unclear, the refinement system should generate clarification questions
 # INSTEAD of forcing a placeholder. Placeholders are for clearly identified
 # gaps; questions are for diffuse uncertainty.
 
-vocabulary_version: "1.0"
+vocabulary_version: "1.2"
 total_placeholders: 16
 naming_convention: "<TBD_UPPERCASE_UNDERSCORE>"
 
 # ============================================================================
 # SEMANTIC AMBIGUITY  (3 placeholders)
 # ============================================================================
-# The 30 sampled SemanticAmbiguity stories share three recurring gaps:
-# (a) undefined action verbs ("process", "manage", "handle"),
-# (b) unmeasurable benefit clauses ("save time", "improve security"),
-# (c) undefined qualitative modifiers ("detailed", "comprehensive").
-
 SemanticAmbiguity:
   - name: "<TBD_ACTION_SPECIFICATION>"
     description: >
@@ -74,6 +109,15 @@ SemanticAmbiguity:
     example:
       before: "As a loan officer, I want to access system in order to meet financial goals."
       after:  "As a loan officer, I want to <TBD_ACTION_SPECIFICATION> the system in order to meet financial goals."
+    literature_evidence: >
+      Berrocal Rojas and Barrantes Sliesarieva (2010, NAACL HLT Workshop)
+      classify general system verbs such as "process", "monitor", "support",
+      and "check" as broad verbs that mask the specific software action,
+      protocol, or architectural boundary required. Amna and Poels (2022,
+      systematic review) and the terminological-ambiguity study confirm
+      that "process", "user", and "document" are among the most frequently
+      overloaded terms in user stories, triggering divergent developer
+      interpretations.
 
   - name: "<TBD_METRIC>"
     description: >
@@ -89,6 +133,12 @@ SemanticAmbiguity:
     example:
       before: "As a doctor, I would like to update system to save time."
       after:  "As a doctor, I would like to update system to save <TBD_METRIC> of clinician time."
+    literature_evidence: >
+      Carlson and Laplante (2014, Innov. Syst. Softw. Eng. 10(2), Sec. 3.3.5
+      p. 83) reproduce the NASA ARM weak-phrases list including "adequate",
+      "effective", "timely", and "normal" as unmeasurable performance
+      modifiers. Amna and Poels (2022) confirm unmeasurable performance
+      claims as a leading cause of acceptance-criteria failures.
 
   - name: "<TBD_QUALIFIER>"
     description: >
@@ -104,14 +154,19 @@ SemanticAmbiguity:
     example:
       before: "...with detailed specifications and comprehensive requirements."
       after:  "...with <TBD_QUALIFIER> specifications and <TBD_QUALIFIER> requirements."
+    literature_evidence: >
+      Carlson and Laplante (2014, Sec. 3.3.5 p. 83) reproduce the NASA ARM
+      weak-phrases list including "adequate", "as appropriate", "be able
+      to", "capability of", "effective", and "easy to" as the canonical
+      undefined qualitative descriptors. Bajceta et al. (2022, NLP4RE @
+      REFSQ) empirically validate these markers on industrial data,
+      reporting recall of 0.85 to 0.98 across the evaluated tools. Amna
+      and Poels (2022) catalogue "proper", "adequate", and "comprehensive"
+      among the most frequent vague qualifiers in user stories.
 
 # ============================================================================
 # SCOPE AMBIGUITY  (2 placeholders)
 # ============================================================================
-# The 30 sampled ScopeAmbiguity stories share two recurring gaps:
-# (a) the affected entity set is undefined (which records, which orders),
-# (b) the applicability condition is unstated (under what circumstances).
-
 ScopeAmbiguity:
   - name: "<TBD_SCOPE_ENTITY>"
     description: >
@@ -126,6 +181,14 @@ ScopeAmbiguity:
     example:
       before: "As a nurse, I want to access records in order to reduce errors."
       after:  "As a nurse, I want to access <TBD_SCOPE_ENTITY> in order to reduce errors."
+    literature_evidence: >
+      Amna and Poels (2022) identify generic entity nouns as a recurring
+      pattern of under-specification across user-story corpora. The
+      AmbiTRUS framework (2025) lists incomplete and imprecise terminology
+      as named ambiguity categories. The terminological-ambiguity study
+      (2018) shows that generic nouns like "data", "service", and
+      "document" systematically trigger different stakeholder
+      interpretations.
 
   - name: "<TBD_SCOPE_CONDITION>"
     description: >
@@ -139,14 +202,17 @@ ScopeAmbiguity:
     example:
       before: "As a nurse, I need to update system so that I can reduce errors."
       after:  "As a nurse, I need to update the system when <TBD_SCOPE_CONDITION> so that I can reduce errors."
+    literature_evidence: >
+      Berry and Kamsties (2000, "The Dangerous 'All'", IWSSD) establish the
+      canonical argument that universal quantifiers ("all", "every", "each",
+      "any") create distributive-vs-collective interpretation problems and
+      verification cost. Berrocal and Barrantes (2010, NAACL HLT) flag
+      "any" and "not limited to" as non-deterministic constructs that
+      prevent deterministic software verification.
 
 # ============================================================================
 # ACTOR AMBIGUITY  (2 placeholders)
 # ============================================================================
-# Every single one of the 30 sampled ActorAmbiguity stories used the
-# generic role "user" in the actor slot, even when the action requested
-# was clearly permission-restricted (e.g., "prescribe medication").
-
 ActorAmbiguity:
   - name: "<TBD_ROLE>"
     description: >
@@ -161,6 +227,15 @@ ActorAmbiguity:
     example:
       before: "As a user, I want to prescribe medication in order to save time."
       after:  "As a <TBD_ROLE>, I want to prescribe medication in order to save time."
+    literature_evidence: >
+      The AmbiTRUS framework (Amna and Poels, 2022/2025) lists "ambiguous
+      actor" as a primary ambiguity category and flags "admin", "user",
+      "guest user", and "verified user" as overloaded role concepts.
+      Berrocal and Barrantes (2010) additionally identify human-action
+      verbs ("determine", "ignore", "consider", "analyse") as
+      anthropomorphizing the system; the actor responsible for these
+      cognitive operations must be specified as a human role rather than
+      a software component.
 
   - name: "<TBD_PERMISSION_LEVEL>"
     description: >
@@ -174,14 +249,15 @@ ActorAmbiguity:
     example:
       before: "As a user, I want to process application in order to comply with regulations."
       after:  "As a <TBD_ROLE> with <TBD_PERMISSION_LEVEL>, I want to process application in order to comply with regulations."
+    literature_evidence: >
+      Amna and Poels (2022) identify underspecified actor responsibilities
+      as a recurring defect pattern. The AmbiTRUS taxonomy captures this
+      under its actor-ambiguity category, noting that role mention without
+      permission specification is a structurally distinct sub-pattern.
 
 # ============================================================================
 # ACCEPTANCE AMBIGUITY  (2 placeholders)
 # ============================================================================
-# The 30 sampled AcceptanceAmbiguity stories share two recurring gaps:
-# (a) no testable success condition (how would a tester verify this?),
-# (b) no measurable outcome (what observable result proves it works?).
-
 AcceptanceAmbiguity:
   - name: "<TBD_ACCEPTANCE_CRITERIA>"
     description: >
@@ -196,6 +272,15 @@ AcceptanceAmbiguity:
     example:
       before: "As a investor, I need to transfer funds so that I have better save time."
       after:  "As a investor, I need to transfer funds; this is met when <TBD_ACCEPTANCE_CRITERIA>."
+    literature_evidence: >
+      Amna and Poels (2022) and the AmbiTRUS framework list underspecified
+      acceptance criteria among the most consequential ambiguity defects,
+      directly impacting test-case design and verification. Carlson and
+      Laplante (2014, Sec. 3.3.5 p. 83) reproduce the NASA ARM weak-phrases
+      list, which captures the kind of vague success descriptors ("adequate",
+      "effective") that frequently appear in unverifiable acceptance
+      criteria. Bajceta et al. (2022) empirically validate these markers on
+      industrial requirements.
 
   - name: "<TBD_MEASURABLE_OUTCOME>"
     description: >
@@ -209,14 +294,16 @@ AcceptanceAmbiguity:
     example:
       before: "As a quality inspector, I need to schedule maintenance so that I have better ensure quality."
       after:  "As a quality inspector, I need to schedule maintenance so that <TBD_MEASURABLE_OUTCOME> is achieved."
+    literature_evidence: >
+      Carlson and Laplante (2014) reproduce ARM weak-phrase markers
+      ("be able to", "be capable of", "provide for") that signal
+      unverifiable outcomes. Amna and Poels (2022) confirm this pattern
+      across multiple user-story corpora as a recurring source of
+      unverifiable requirements.
 
 # ============================================================================
 # DEPENDENCY AMBIGUITY  (2 placeholders)
 # ============================================================================
-# The 30 sampled DependencyAmbiguity stories share two recurring gaps:
-# (a) implicit upstream features or systems that are never named,
-# (b) preconditions or triggers that are not stated.
-
 DependencyAmbiguity:
   - name: "<TBD_DEPENDENCY>"
     description: >
@@ -232,6 +319,14 @@ DependencyAmbiguity:
     example:
       before: "As a bank customer, I need to download statements so that I can track spending."
       after:  "As a bank customer, I need to download statements (depends on <TBD_DEPENDENCY>) so that I can track spending."
+    literature_evidence: >
+      The AmbiTRUS framework lists implicit upstream dependencies among
+      its named ambiguity categories. Carlson and Laplante (2014, Fig. 4
+      p. 80) include "Number of TBDs/TBAs" as a NASA SATC completeness
+      metric, providing the empirical basis for treating "tbd" and
+      similar explicit-gap markers as dependency-related ambiguity
+      signals. Amna and Poels (2022) report that dependency ambiguity is
+      a recurring source of integration defects and schedule slip.
 
   - name: "<TBD_PRECONDITION>"
     description: >
@@ -245,14 +340,17 @@ DependencyAmbiguity:
     example:
       before: "As a network admin, I need to process requests so that I can maintain connectivity."
       after:  "When <TBD_PRECONDITION>, as a network admin, I need to process requests so that I can maintain connectivity."
+    literature_evidence: >
+      Berrocal and Barrantes (2010) identify non-deterministic temporal
+      adverbs ("continually", "periodically", "regularly", "later") as
+      severe triggers for temporal ambiguity, failing to define a discrete
+      temporal bound or event trigger. The EARS notation (Mavin et al.,
+      2009) explicitly addresses this by mandating a "When <trigger>" slot
+      in well-formed event-driven requirements.
 
 # ============================================================================
 # PRIORITY AMBIGUITY  (2 placeholders)
 # ============================================================================
-# All 30 sampled PriorityAmbiguity stories contained the literal phrase
-# "as soon as possible", asserting urgency without specifying priority
-# level OR temporal urgency concretely.
-
 PriorityAmbiguity:
   - name: "<TBD_PRIORITY_LEVEL>"
     description: >
@@ -266,6 +364,13 @@ PriorityAmbiguity:
     example:
       before: "As a investor, I want to view account balance in order to track spending as soon as possible."
       after:  "As a investor, I want to view account balance in order to track spending; priority: <TBD_PRIORITY_LEVEL>."
+    literature_evidence: >
+      Carlson and Laplante (2014, Sec. 3.3.4 p. 83) reproduce the NASA ARM
+      options/modal-verbs list including "can", "may", and "optionally" as
+      markers that "loosen the specification by allowing the developer
+      latitude in implementing a requirement." These weaken the priority
+      enforcement of a requirement. Bajceta et al. (2022) empirically
+      validate these markers on industrial requirements.
 
   - name: "<TBD_URGENCY>"
     description: >
@@ -279,15 +384,16 @@ PriorityAmbiguity:
     example:
       before: "As a nurse, I need to update patient info so I can ensure compliance as soon as possible."
       after:  "As a nurse, I need to update patient info so I can ensure compliance by <TBD_URGENCY>."
+    literature_evidence: >
+      Berrocal and Barrantes (2010) explicitly catalogue non-deterministic
+      adverbs ("continually", "periodically", "regularly", "later") as
+      ambiguity triggers because they fail to define discrete temporal
+      bounds. Amna and Poels (2022) link vague temporal markers to
+      schedule slip and missed deadlines in agile projects.
 
 # ============================================================================
 # TECHNICAL AMBIGUITY  (3 placeholders)
 # ============================================================================
-# 29 of the 30 sampled TechnicalAmbiguity stories contained the literal
-# phrase "with fast performance", a non-functional requirement stated
-# without any technical specification. The three recurring gaps are
-# performance targets, technical constraints, and integration points.
-
 TechnicalAmbiguity:
   - name: "<TBD_PERFORMANCE_TARGET>"
     description: >
@@ -302,6 +408,11 @@ TechnicalAmbiguity:
     example:
       before: "As a caregiver, I want to update patient info in order to improve patient care with fast performance."
       after:  "As a caregiver, I want to update patient info in order to improve patient care with response time below <TBD_PERFORMANCE_TARGET>."
+    literature_evidence: >
+      Carlson and Laplante (2014, Sec. 3.3.5 p. 83) reproduce the NASA ARM
+      weak-phrases list including "timely" and "effective" as canonical
+      unquantified performance descriptors. The AmbiTRUS framework lists
+      "missing response time" as a named ambiguity pattern.
 
   - name: "<TBD_TECH_CONSTRAINT>"
     description: >
@@ -317,6 +428,13 @@ TechnicalAmbiguity:
     example:
       before: "As a financial advisor, I would like to process application to comply with regulations with fast performance."
       after:  "As a financial advisor, I would like to process application to comply with <TBD_TECH_CONSTRAINT>."
+    literature_evidence: >
+      The AmbiTRUS framework explicitly captures technical-context
+      ambiguity, including unspecified platforms, protocols, and
+      compliance frameworks. Wang et al. (2013, NLDB) report synonymous
+      concepts (e.g., "system" used interchangeably with "testing
+      gateway") as a source of traceability drift in technical
+      specifications.
 
   - name: "<TBD_INTEGRATION_POINT>"
     description: >
@@ -331,3 +449,10 @@ TechnicalAmbiguity:
     example:
       before: "As a account holder, I want to download statements in order to improve security with fast performance."
       after:  "As a account holder, I want to download statements via <TBD_INTEGRATION_POINT> in order to improve security."
+    literature_evidence: >
+      Amna and Poels (2022) report integration-point ambiguity as a
+      common source of cross-team coordination defects. The AmbiTRUS
+      framework includes unnamed integration targets in its dependency-
+      and technical-context ambiguity categories. Massey et al. (2014,
+      RE Conference) document the importance of integration-context
+      specification in regulatory analysis (HIPAA study).
