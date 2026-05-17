@@ -381,14 +381,14 @@ if input_mode == "Single story":
     current_val = st.session_state.get('quick_fill', "")
     story_input = st.text_area("User Story", value=current_val, height=100, placeholder="e.g. As a user, I want to update records...")
     
-    if st.button("🔍 Analyze and Refine", type="primary"):
+    if st.button("🔍 Analyze and Refine", type="primary", disabled=not st.session_state.api_key, help="Enter your Gemini API key in the sidebar to enable analysis."):
         st.session_state.story_queue = [{"id": str(uuid.uuid4()), "text": story_input.strip()}]
         st.session_state.current_queue_position = 0
         trigger_batch = True
         
 elif input_mode == "Multiple stories":
     stories_input = st.text_area("Paste multiple stories here, separated by blank lines. Maximum 50 stories per batch.", height=250)
-    if st.button("🔍 Start Batch", type="primary"):
+    if st.button("🔍 Start Batch", type="primary", disabled=not st.session_state.api_key, help="Enter your Gemini API key in the sidebar to enable analysis."):
         stories = parse_multiple_stories(stories_input)
         valid_stories, validation_warnings = validate_stories(stories, demo_config['max_stories_per_batch'], demo_config['min_story_length_chars'], demo_config['max_story_length_chars'])
         st.session_state.story_queue = [{"id": str(uuid.uuid4()), "text": s} for s in valid_stories]
@@ -399,7 +399,7 @@ elif input_mode == "Upload document":
     uploaded_file = st.file_uploader("Upload CSV, TXT, or DOCX", type=["csv", "txt", "docx"])
     with st.expander("Format Help"):
         st.markdown("CSV: one story per row in a column named 'StoryText', 'story', or 'text'.\nTXT: one story per blank-line-separated block.\nDOCX: one story per paragraph.\nMaximum 50 stories per batch.")
-    if st.button("🔍 Start Batch", type="primary") and uploaded_file:
+    if st.button("🔍 Start Batch", type="primary", disabled=not st.session_state.api_key, help="Enter your Gemini API key in the sidebar to enable analysis.") and uploaded_file:
         try:
             filename = uploaded_file.name.lower()
             if filename.endswith(".csv"):
@@ -515,8 +515,20 @@ if st.session_state.current_story_text and st.session_state.current_pipeline_out
                 
         if 'refinement' in outputs and 'placeholders_used' in outputs['refinement']:
             st.markdown("**Placeholders inserted:**")
-            ph_html = [f"<span class='label-chip pass'>{p}</span>" for p in outputs['refinement']['placeholders_used']]
-            st.markdown(" ".join(ph_html), unsafe_allow_html=True)
+            # Build compact chips with description from config
+            _pb_descriptions = getattr(get_refiner().prompt_builder, 'placeholder_descriptions', {})
+            ph_chips = []
+            for p in outputs['refinement']['placeholders_used']:
+                desc = _pb_descriptions.get(p, "")
+                # Truncate long descriptions to keep chip compact
+                short_desc = (desc[:90] + "\u2026") if len(desc) > 90 else desc
+                ph_chips.append(
+                    f"<span class='placeholder-chip'>"
+                    f"<span class='ph-name'>{p}</span>"
+                    f"<span class='ph-desc'>{short_desc}</span>"
+                    f"</span>"
+                )
+            st.markdown("".join(ph_chips), unsafe_allow_html=True)
                 
             st.markdown("**Clarification questions:**")
             for i, q in enumerate(outputs['refinement'].get('clarification_questions', [])):

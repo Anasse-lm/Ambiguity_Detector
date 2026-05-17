@@ -4,44 +4,28 @@ import json
 from pathlib import Path
 
 sys.path.append(str(Path(__file__).parent / "src"))
-
-from req_ambiguity.refinement.refiner import Refiner
-from req_ambiguity.refinement.prompt_builder import PromptBuilder
-from req_ambiguity.refinement.backends.gemini import GeminiBackend
 from req_ambiguity.refinement.validator import RefinementValidator
 
 def main():
-    api_key = os.environ.get("GEMINI_API_KEY")
-    if not api_key:
-        print("Set GEMINI_API_KEY")
-        return
-        
-    builder = PromptBuilder()
-    backend = GeminiBackend(max_retries=1, retry_delay_seconds=1.0)
     validator = RefinementValidator('configs/placeholders.yaml')
     
-    refiner = Refiner(
-        prompt_builder=builder,
-        backend=backend,
-        validator=validator,
-        config={"max_retries": 1}
-    )
-    
-    xai_record_path = Path(__file__).parent / "outputs" / "xai" / "json" / "US-C1-005.json"
-    with open(xai_record_path, 'r') as f:
-        xai_record = json.load(f)
-        
-    print("Testing refiner...")
-    outcome = refiner.refine("US-C1-005", xai_record)
-    
-    print("\n--- OUTCOME ---")
-    print(f"Passed: {outcome.passed}")
-    print(f"Parsed JSON: {outcome.parsed_json}")
-    print(f"Raw Response: {outcome.raw_response}")
-    
-    if not outcome.passed:
-        for log in outcome.attempt_logs:
-            print("\nAttempt Error:", log.get('validation_error'))
+    mock_llm_response = """
+{
+  "refined_story": "As a investor, I want to <TBD_ACTION_SPECIFICATION> account so that I can improve security by <TBD_URGENCY>",
+  "placeholders_used": ["<TBD_ACTION_SPECIFICATION>", "<TBD_URGENCY>"],
+  "clarification_questions": [
+    "What specific action?",
+    "When exactly?"
+  ]
+}
+"""
+    print(f"All legal placeholders: {len(validator.all_legal_placeholders)}")
+    res = validator.validate(mock_llm_response)
+    print("Passed:", res.passed)
+    print("Schema Errors:", res.schema_errors)
+    print("Parse Error:", res.parse_error)
+    print("Illegal Placeholders:", res.illegal_placeholders)
+    print("Inconsistency:", res.inconsistency_warnings)
 
 if __name__ == "__main__":
     main()
