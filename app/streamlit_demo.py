@@ -196,16 +196,30 @@ with st.sidebar:
             st.warning("Enter your Gemini API key to enable refinement.")
             
     st.subheader("Model Sensitivity")
-    global_threshold = st.slider(
-        "Ambiguity Detection Threshold",
-        min_value=0.0,
-        max_value=1.0,
-        value=0.50,
-        step=0.05,
-        help="Adjust the classifier's sensitivity. Lower values flag more potential ambiguities."
-    )
-    for key in list(thresholds.keys()):
-        thresholds[key] = global_threshold
+    st.caption("Adjust detection thresholds. Default values represent the mathematically optimal thresholds from model training.")
+    
+    try:
+        with open('outputs/results/optimal_thresholds.json', 'r') as f:
+            pristine_thresholds = json.load(f)
+    except Exception:
+        pristine_thresholds = {}
+
+    for label in label_cols:
+        clean_name = label.replace('Ambiguity', '')
+        default_val = float(pristine_thresholds.get(label, 0.50))
+        default_val = max(0.0, min(1.0, default_val))
+        
+        slider_val = st.slider(
+            f"{clean_name} Threshold",
+            min_value=0,
+            max_value=100,
+            value=int(round(default_val * 100)),
+            step=5,
+            key=f"slider_{label}",
+            format="%d%%",
+            help=f"Optimal trained default threshold: {int(round(default_val * 100))}%."
+        )
+        thresholds[label] = slider_val / 100.0
         
     st.divider()
     if st.button("New Session", use_container_width=True):
@@ -526,7 +540,7 @@ if st.session_state.current_story_text and st.session_state.current_pipeline_out
                         
                     render_html_heatmap(exp['tokens'], exp['scores'], html_path, positive_color=severity_color)
                     with open(html_path, 'r', encoding='utf-8') as f:
-                        st.components.v1.html(f.read(), height=100)
+                        st.markdown(f.read(), unsafe_allow_html=True)
                         
                     # Show Placeholders from Bridge
                     label_placeholders = [bs['placeholder'] for bs in outputs.get('bridge_selections', []) if bs['label'] == label]
@@ -826,7 +840,8 @@ if st.session_state.current_story_text and st.session_state.current_pipeline_out
         st.success("No ambiguity detected! This user story passes the quality threshold.")
 
 # REPORTS SECTION
-if not st.session_state.current_story_id or st.session_state.get('followup_result'):
+summary = st.session_state.session_log.get_session_summary(st.session_state.current_session_id)
+if summary.get('stories_processed', 0) > 0 and (not st.session_state.current_story_id or st.session_state.get('followup_result')):
     st.divider()
     st.markdown('<div class="custom-card"><h3>Export Results</h3>', unsafe_allow_html=True)
     st.write("Download your session artifacts or generated reports here.")
@@ -845,7 +860,6 @@ if not st.session_state.current_story_id or st.session_state.get('followup_resul
     if cq_bytes:
         cols[2].download_button("❓ Clarifications", data=cq_bytes, file_name=f"clarification_questions_{st.session_state.current_session_id[:8]}.docx", mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document")
         
-    summary = st.session_state.session_log.get_session_summary(st.session_state.current_session_id)
     if summary['accepted'] >= demo_config.get('refined_requirements_doc_min_stories', 5):
         req_bytes = refined_requirements_report(st.session_state.current_session_id)
         if req_bytes:
